@@ -49,7 +49,8 @@ await new Promise((resolve, reject) => {
 });
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+const page = await context.newPage();
 
 try {
   // ---------------------------------------------------------- setup
@@ -132,8 +133,31 @@ try {
   check('risk reviewed badge cleared pending state', !(await page.isVisible('text=risk entries to review')));
   await page.screenshot({ path: `${OUT}05-choose-client-after.png` });
 
+  // -------------------------- app close + reopen (fresh JS context)
+  // Simulates quitting and relaunching the app: a brand-new page has no
+  // in-memory state, so everything shown must come from IndexedDB.
+  console.log('Close and reopen app');
+  const page2 = await context.newPage();
+  await page.close();
+  await page2.goto(BASE);
+  await page2.waitForSelector('text=Workspace locked');
+  check('reopened app requires authentication', true);
+  await page2.fill('input[type="password"]', 'phase-one-passphrase');
+  await page2.click('button:has-text("Unlock workspace")');
+  await page2.waitForSelector('h1:has-text("Choose client")');
+  check('client survives app close/reopen', await page2.isVisible('text=J.T.'));
+  await page2.click('text=J.T.');
+  await page2.waitForSelector('text=Current clinical snapshot');
+  check('diagnosis still attached to correct client', await page2.isVisible('text=PTSD'));
+  await page2.click('a:has-text("Clinical inputs")');
+  await page2.waitForSelector('.list-row:has-text("Session transcript")');
+  await page2.click('.list-row:has-text("Session transcript")');
+  await page2.waitForSelector('text=Risk content — reviewed');
+  check('input text and risk review persisted', await page2.isVisible('text=passive suicidal ideation'));
+  const page3 = page2;
+
   // ------------------------------------- encrypted-at-rest spot check
-  const leaked = await page.evaluate(async () => {
+  const leaked = await page3.evaluate(async () => {
     const req = indexedDB.open('cockpit-clinical');
     const db = await new Promise((res, rej) => {
       req.onsuccess = () => res(req.result);
