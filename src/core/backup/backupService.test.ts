@@ -81,6 +81,90 @@ describe('backupService', () => {
     expect(new TextDecoder().decode(bytes)).toBe('doc');
   });
 
+  it('round-trips Phase 2 structured data with relationships intact', async () => {
+    const sourceName = `test-backup-p2-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p2-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-2' });
+    const client = await sourceDb.createClient(
+      {
+        displayName: 'P.Q.',
+        contactEnabled: false,
+        levelOfCare: 'outpatient',
+        status: 'active',
+        diagnoses: [],
+        medications: [],
+        risk: { level: 'low' },
+      },
+      'Dr. Osei',
+    );
+    const input = await sourceDb.createInput(
+      {
+        clientId: client.id,
+        inputType: 'rough-notes',
+        dateOfInformation: '2026-07-01',
+        rawText: 'Client reports insomnia most nights.',
+        authorSource: 'Dr. Osei',
+        reportedBy: 'therapist-entered',
+        containsRisk: false,
+        allowAiAnalysis: true,
+        localOnly: true,
+      },
+      [],
+      'Dr. Osei',
+    );
+    const fact = await sourceDb.structured.createFact(
+      {
+        clientId: client.id,
+        sourceInputId: input.id,
+        sourceInputVersion: 1,
+        category: 'sleep',
+        statement: 'Insomnia most nights',
+        excerpt: 'Client reports insomnia most nights.',
+        dateRecorded: '2026-07-01',
+        classification: 'client-report',
+        extractionMethod: 'manual',
+        extractionConfidence: 'high',
+        temporalStatus: 'current',
+        riskRelated: false,
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.structured.decideFact(fact.id, 'approve', 'Dr. Osei');
+    await sourceDb.structured.createAssessment(
+      { clientId: client.id, definitionKey: 'phq9', name: 'PHQ-9', dateAdministered: '2026-07-01', totalScore: 9 },
+      'Dr. Osei',
+    );
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    const dump = JSON.stringify(backup.records);
+    expect(dump).not.toContain('Insomnia');
+
+    const targetAuth = makeService(targetName);
+    expect(await targetAuth.getStatus()).toBe('uninitialized');
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-2');
+    const restoredClient = (await restored.listClients())[0];
+    const facts = await restored.structured.listFacts(restoredClient.id);
+    expect(facts).toHaveLength(1);
+    expect(facts[0].reviewStatus).toBe('approved');
+    const evidence = await restored.structured.listEvidence(restoredClient.id, {
+      type: 'fact',
+      id: facts[0].id,
+    });
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].sourceInputId).toBe(facts[0].sourceInputId);
+    const assessments = await restored.structured.listAssessments(restoredClient.id);
+    expect(assessments[0].severityInterpretation).toContain('Mild');
+    const versions = await restored.structured.listVersions(restoredClient.id, 'fact', facts[0].id);
+    expect(versions.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('rejects invalid backup files', async () => {
     expect(isValidBackup(null)).toBe(false);
     expect(isValidBackup({})).toBe(false);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AuthError, authService, type AuthStatus } from '../core/auth/authService';
 import { useDataStore } from './dataStore';
+import { useStructuredStore } from './structuredStore';
 
 interface AuthState {
   status: AuthStatus | 'loading';
@@ -74,6 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   lock: async () => {
     await authService.lock();
     useDataStore.getState().reset();
+    useStructuredStore.getState().reset();
     set({ status: 'locked', error: undefined });
   },
 

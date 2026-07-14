@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
 import { Badge, Card, EmptyState, Field, Modal } from '../../app/components/ui';
 import { authService } from '../../core/auth/authService';
@@ -7,16 +7,54 @@ import { inputTypeLabel, REPORTED_BY_OPTIONS } from '../../core/db/schema';
 import { downloadBytes } from '../../lib/download';
 import { fmtDate, fmtDateTime, formatBytes } from '../../lib/format';
 import { useDataStore } from '../../state/dataStore';
+import { useStructuredStore } from '../../state/structuredStore';
 import type { ClientContext } from '../dashboard/ClientDashboardLayout';
+
+/** Renders raw text with the evidence excerpt highlighted when ?highlight= is present. */
+function HighlightedText({ text, highlight }: { text: string; highlight?: string }) {
+  const parts = useMemo(() => {
+    if (!highlight) return null;
+    const idx = text.toLowerCase().indexOf(highlight.toLowerCase());
+    if (idx < 0) return null;
+    return [text.slice(0, idx), text.slice(idx, idx + highlight.length), text.slice(idx + highlight.length)];
+  }, [text, highlight]);
+
+  useEffect(() => {
+    if (parts) {
+      document.getElementById('evidence-highlight')?.scrollIntoView({ block: 'center' });
+    }
+  }, [parts]);
+
+  if (!parts) return <p className="prewrap soft" style={{ lineHeight: 1.7 }}>{text}</p>;
+  return (
+    <p className="prewrap soft" style={{ lineHeight: 1.7 }}>
+      {parts[0]}
+      <mark id="evidence-highlight" style={{ background: 'var(--amber-soft)', padding: '1px 2px', borderRadius: 3 }}>
+        {parts[1]}
+      </mark>
+      {parts[2]}
+    </p>
+  );
+}
 
 export function InputDetailScreen() {
   const { client } = useOutletContext<ClientContext>();
   const { inputId } = useParams<{ inputId: string }>();
+  const [searchParams] = useSearchParams();
+  const highlight = searchParams.get('highlight') ?? undefined;
   const navigate = useNavigate();
   const inputs = useDataStore((s) => s.inputs[client.id]) ?? [];
   const { updateInput, markRiskReviewed, deleteInput } = useDataStore();
+  const structuredData = useStructuredStore((s) => s.byClient[client.id]);
+  const loadStructured = useStructuredStore((s) => s.loadClient);
+
+  useEffect(() => {
+    void loadStructured(client.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client.id]);
 
   const input = inputs.find((i) => i.id === inputId);
+  const extractedCount = (structuredData?.facts ?? []).filter((f) => f.sourceInputId === inputId).length;
 
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
@@ -82,6 +120,9 @@ export function InputDetailScreen() {
           <Icon name="chevron-left" size={15} /> All inputs
         </button>
         <div className="cluster">
+          <button className="btn btn--primary btn--sm" onClick={() => navigate('extract')}>
+            <Icon name="search" size={14} /> Extract structured information
+          </button>
           {!editing && (
             <button className="btn btn--secondary btn--sm" onClick={startEdit}>
               <Icon name="edit" size={14} /> Edit text
@@ -178,9 +219,16 @@ export function InputDetailScreen() {
             </div>
           </div>
         ) : input.rawText ? (
-          <p className="prewrap soft" style={{ lineHeight: 1.7 }}>{input.rawText}</p>
+          <HighlightedText text={input.rawText} highlight={highlight} />
         ) : (
           <p className="muted">No text content — see attachments.</p>
+        )}
+
+        {extractedCount > 0 && (
+          <p className="muted small" style={{ marginTop: 12 }}>
+            <Icon name="clipboard" size={13} /> {extractedCount} structured fact{extractedCount === 1 ? '' : 's'} extracted from this entry —{' '}
+            <button className="btn btn--ghost btn--sm" onClick={() => navigate('../profile')}>view in profile</button>
+          </p>
         )}
       </Card>
 

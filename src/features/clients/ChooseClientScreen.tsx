@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
 import { Badge, EmptyState, RiskBadge } from '../../app/components/ui';
+import { useStructuredStore } from '../../state/structuredStore';
 import {
   CLIENT_STATUSES,
   LEVELS_OF_CARE,
@@ -89,8 +90,15 @@ export function ChooseClientScreen() {
   const navigate = useNavigate();
   const { clients, derived, prefs, createClient, noteClientViewed } = useDataStore();
   const lock = useAuthStore((s) => s.lock);
+  const globalQueue = useStructuredStore((s) => s.globalQueue);
+  const loadGlobalQueue = useStructuredStore((s) => s.loadGlobalQueue);
   const [filter, setFilter] = useState<ClientListFilter>(DEFAULT_FILTER);
   const [showAdd, setShowAdd] = useState(false);
+
+  useEffect(() => {
+    void loadGlobalQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const visible = useMemo(
     () => filterClients(clients, derived, filter),
@@ -144,10 +152,18 @@ export function ChooseClientScreen() {
               )}
             </p>
           </div>
-          <button className="btn btn--primary" onClick={() => setShowAdd(true)}>
-            <Icon name="plus" size={16} />
-            Add client
-          </button>
+          <div className="cluster">
+            {globalQueue.length > 0 && (
+              <button className="btn btn--secondary" onClick={() => navigate('/review')}>
+                <Icon name="check" size={15} />
+                Review queue ({globalQueue.length})
+              </button>
+            )}
+            <button className="btn btn--primary" onClick={() => setShowAdd(true)}>
+              <Icon name="plus" size={16} />
+              Add client
+            </button>
+          </div>
         </div>
 
         <div className="card card--pad stack" style={{ gap: 12 }}>

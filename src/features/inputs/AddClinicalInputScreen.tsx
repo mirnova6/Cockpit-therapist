@@ -58,8 +58,7 @@ export function AddClinicalInputScreen() {
     setFiles((prev) => [...prev, ...added]);
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const save = async (destination: 'detail' | 'extract') => {
     setError(undefined);
     if (!rawText.trim() && files.length === 0) {
       return setError('Enter text or attach at least one file.');
@@ -86,11 +85,20 @@ export function AddClinicalInputScreen() {
         files as NewAttachment[],
       );
       // Risk-flagged material routes straight to the review panel.
-      navigate(`../inputs/${input.id}`);
+      navigate(
+        destination === 'extract' && !containsRisk
+          ? `../inputs/${input.id}/extract`
+          : `../inputs/${input.id}`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
       setBusy(false);
     }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    await save('detail');
   };
 
   return (
@@ -222,10 +230,17 @@ export function AddClinicalInputScreen() {
           <Icon name="check" size={16} />
           Save to record
         </button>
+        <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void save('extract')}>
+          <Icon name="search" size={16} />
+          Save &amp; preview extraction
+        </button>
         <button type="button" className="btn btn--ghost" onClick={() => navigate('..')} disabled={busy}>
           Cancel
         </button>
       </div>
+      <p className="muted small">
+        Risk-flagged entries open on their review panel first; extraction is available afterwards.
+      </p>
     </form>
   );
 }

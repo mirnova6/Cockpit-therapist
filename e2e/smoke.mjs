@@ -133,6 +133,76 @@ try {
   check('risk reviewed badge cleared pending state', !(await page.isVisible('text=risk entries to review')));
   await page.screenshot({ path: `${OUT}05-choose-client-after.png` });
 
+  // ------------------------------------------- Phase 2: extraction flow
+  console.log('Phase 2: extraction preview');
+  await page.click('text=J.T.');
+  await page.waitForSelector('text=Current clinical snapshot');
+  await page.click('a:has-text("Add information")');
+  await page.waitForSelector('text=Add clinical information');
+  await page.fill(
+    'textarea',
+    'PHQ-9: 18 today. Client reports insomnia most nights. Started Sertraline 50 mg daily. Client said “I feel like a burden to my family.”',
+  );
+  await page.click('button:has-text("preview extraction")');
+  await page.waitForSelector('text=Extract structured information —');
+  await page.click('button:has-text("Run extraction preview")');
+  await page.waitForSelector('text=proposals');
+  check('assessment score proposed', await page.isVisible('text=Assessment score detected: PHQ-9 = 18'));
+  check('capability note is honest', await page.isVisible('text=no AI model is connected'));
+  await page.screenshot({ path: `${OUT}08-extraction-preview.png` });
+
+  // Defer one fact for clarification, approve the rest.
+  await page.locator('button:has-text("Needs clarification")').first().click();
+  await page.waitForSelector('.badge:has-text("Needs clarification")');
+  await page.click('button:has-text("Approve all non-risk")');
+  await page.waitForSelector('text=All proposals reviewed');
+  check('extraction decisions complete', true);
+
+  // ------------------------------------------- Phase 2: structured profile
+  console.log('Phase 2: structured profile & assessments');
+  await page.click('a:has-text("Structured profile")');
+  await page.waitForSelector('text=Structured clinical profile');
+  check('sleep fact in symptoms', await page.isVisible('text=insomnia most nights'));
+  check('quote captured as client report', await page.isVisible('text=burden to my family'));
+  // The medication fact was deferred as needs-clarification — the approved
+  // view must NOT show it, and the pending view must.
+  check('deferred fact hidden from approved profile', !(await page.isVisible('text=Sertraline 50 mg')));
+  await page.click('button:has-text("Pending review")');
+  await page.waitForSelector('text=Sertraline 50 mg');
+  check('deferred fact visible in pending view', true);
+  await page.click('button:has-text("Approved profile")');
+  await page.screenshot({ path: `${OUT}09-structured-profile.png` });
+
+  await page.click('a:has-text("Assessments")');
+  await page.waitForSelector('text=PHQ-9');
+  check('PHQ-9 interpretation from encoded rules', await page.isVisible('text=Moderately severe'));
+  check('screening disclaimer shown', await page.isVisible('text=not a diagnostic instrument'));
+  await page.screenshot({ path: `${OUT}10-assessments.png` });
+
+  // ------------------------------------------- Phase 2: hypotheses
+  console.log('Phase 2: hypotheses');
+  await page.click('a:has-text("Hypotheses")');
+  await page.click('button:has-text("New hypothesis")');
+  await page.waitForSelector('text=New clinical hypothesis');
+  await page.fill(
+    '.modal textarea',
+    'Client may use avoidance to manage anticipated criticism in close relationships.',
+  );
+  await page.click('button:has-text("Create hypothesis")');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  await page.waitForSelector('text=avoidance to manage anticipated criticism');
+  await page.waitForSelector('.badge:has-text("Insufficient Evidence")');
+  check('hypothesis created with confidence label', true);
+
+  // ------------------------------------------- Phase 2: review queue
+  console.log('Phase 2: review queue');
+  await page.click('a:has-text("Review queue")');
+  await page.waitForSelector('h2:has-text("Review queue")');
+  check('deferred fact waits in queue', await page.isVisible('.badge:has-text("Extracted fact")'));
+  await page.locator('.card button.btn--primary:has-text("Approve")').first().click();
+  await page.waitForSelector('text=Review queue is clear');
+  check('queue clears after approval', true);
+
   // -------------------------- app close + reopen (fresh JS context)
   // Simulates quitting and relaunching the app: a brand-new page has no
   // in-memory state, so everything shown must come from IndexedDB.
@@ -154,6 +224,14 @@ try {
   await page2.click('.list-row:has-text("Session transcript")');
   await page2.waitForSelector('text=Risk content — reviewed');
   check('input text and risk review persisted', await page2.isVisible('text=passive suicidal ideation'));
+
+  // Phase 2 data persists across app relaunch
+  await page2.click('a:has-text("Structured profile")');
+  await page2.waitForSelector('text=Structured clinical profile');
+  check('approved facts persist after relaunch', await page2.isVisible('text=Sertraline 50 mg'));
+  await page2.click('a:has-text("Assessments")');
+  await page2.waitForSelector('text=PHQ-9');
+  check('assessment + interpretation persist after relaunch', await page2.isVisible('text=Moderately severe'));
   const page3 = page2;
 
   // ------------------------------------- encrypted-at-rest spot check
@@ -170,9 +248,16 @@ try {
       r.onerror = () => rej(r.error);
     });
     const dump = JSON.stringify(all);
-    return dump.includes('J.T.') || dump.includes('suicidal') || dump.includes('PTSD');
+    return (
+      dump.includes('J.T.') ||
+      dump.includes('suicidal') ||
+      dump.includes('PTSD') ||
+      dump.includes('Sertraline') ||
+      dump.includes('insomnia') ||
+      dump.includes('burden to my family')
+    );
   });
-  check('IndexedDB contains no plaintext PHI', !leaked);
+  check('IndexedDB contains no plaintext PHI (incl. Phase 2 records)', !leaked);
 } catch (err) {
   failures += 1;
   console.error('E2E failure:', err);

@@ -14,7 +14,12 @@ const TABS = [
   { to: '', label: 'Overview', icon: 'home', end: true },
   { to: 'add', label: 'Add information', icon: 'plus', end: false },
   { to: 'inputs', label: 'Clinical inputs', icon: 'list', end: false },
-  { to: 'timeline', label: 'Timeline', icon: 'activity', end: false },
+  { to: 'profile', label: 'Structured profile', icon: 'clipboard', end: false },
+  { to: 'assessments', label: 'Assessments', icon: 'activity', end: false },
+  { to: 'hypotheses', label: 'Hypotheses', icon: 'search', end: false },
+  { to: 'evidence', label: 'Evidence', icon: 'eye', end: false },
+  { to: 'review', label: 'Review queue', icon: 'check', end: false },
+  { to: 'timeline', label: 'Timeline', icon: 'clock', end: false },
   { to: 'settings', label: 'Client settings', icon: 'settings', end: false },
 ];
 

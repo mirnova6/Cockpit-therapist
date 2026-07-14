@@ -4,6 +4,7 @@
  */
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
+import { StructuredRepository } from './structuredRepository';
 import {
   DEFAULT_PREFS,
   newId,
@@ -40,12 +41,22 @@ export type ClinicalInputDraft = Omit<
 
 export class ClinicalDatabase {
   readonly store: EncryptedStore;
+  /** Phase 2 structured clinical data (facts, assessments, hypotheses, …). */
+  readonly structured: StructuredRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
     dek: CryptoKey,
   ) {
     this.store = new EncryptedStore(adapter, dek);
+    this.structured = new StructuredRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+      getInputMeta: async (id) => {
+        const input = await this.getInput(id);
+        return input ? { clientId: input.clientId, version: input.version } : undefined;
+      },
+    });
   }
 
   // ------------------------------------------------------------ audit
@@ -131,6 +142,7 @@ export class ClinicalDatabase {
 
   /** Permanently removes the client and every associated record and blob. */
   async deleteClient(id: string, author: string): Promise<void> {
+    await this.structured.deleteAllForClient(id);
     const inputs = await this.listInputsForClient(id, { includeArchived: true });
     for (const input of inputs) {
       for (const attachment of input.attachments) {
