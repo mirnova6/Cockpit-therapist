@@ -131,8 +131,11 @@ export function ReviewQueueList({
   };
 
   const bulkApprove = async () => {
+    // The service layer re-checks eligibility for every id: medication,
+    // diagnosis, risk-related, withdrawal, and clarification items are
+    // skipped there even if the UI ever sent them.
     const factIds = visible
-      .filter((i) => selected.has(`${i.kind}:${i.id}`) && i.kind === 'fact' && !i.riskRelated)
+      .filter((i) => selected.has(`${i.kind}:${i.id}`) && i.kind === 'fact' && i.bulkEligible)
       .map((i) => i.id);
     if (factIds.length === 0) return;
     const byClientIds = new Map<string, string[]>();
@@ -141,17 +144,23 @@ export function ReviewQueueList({
       byClientIds.set(item.clientId, [...(byClientIds.get(item.clientId) ?? []), id]);
     }
     let approved = 0;
+    let skipped = 0;
     for (const [clientId, ids] of byClientIds) {
       const result = await bulkApproveFacts(ids, clientId);
       approved += result.approved.length;
+      skipped += result.skipped.length;
     }
-    setBulkResult(`${approved} low-risk fact${approved === 1 ? '' : 's'} approved. Risk items always require individual review.`);
+    setBulkResult(
+      `${approved} eligible low-risk fact${approved === 1 ? '' : 's'} approved.` +
+        (skipped > 0 ? ` ${skipped} skipped by the service layer as requiring individual review.` : '') +
+        ' Medication, diagnosis, and risk items always require individual review.',
+    );
     setSelected(new Set());
     onChanged();
   };
 
   const selectableKeys = visible
-    .filter((i) => i.kind === 'fact' && !i.riskRelated)
+    .filter((i) => i.kind === 'fact' && i.bulkEligible)
     .map((i) => `${i.kind}:${i.id}`);
 
   if (items.length === 0) {
@@ -200,10 +209,10 @@ export function ReviewQueueList({
                 setSelected(selected.size === selectableKeys.length ? new Set() : new Set(selectableKeys))
               }
             >
-              {selected.size === selectableKeys.length ? 'Clear selection' : `Select all low-risk facts (${selectableKeys.length})`}
+              {selected.size === selectableKeys.length ? 'Clear selection' : `Select all eligible low-risk facts (${selectableKeys.length})`}
             </button>
             <button className="btn btn--secondary btn--sm" disabled={selected.size === 0} onClick={() => void bulkApprove()}>
-              <Icon name="check" size={13} /> Approve selected ({selected.size})
+              <Icon name="check" size={13} /> Approve eligible low-risk items ({selected.size})
             </button>
           </>
         )}
@@ -224,7 +233,7 @@ export function ReviewQueueList({
           <Card key={key}>
             <div className="stack-sm">
               <div className="cluster">
-                {item.kind === 'fact' && !item.riskRelated && (
+                {item.kind === 'fact' && item.bulkEligible && (
                   <input
                     type="checkbox"
                     checked={selected.has(key)}
@@ -248,9 +257,15 @@ export function ReviewQueueList({
                 )}
                 <Badge tone="blue" icon="clipboard">{KIND_LABELS[item.kind]}</Badge>
                 {item.riskRelated && <RiskFlagBadge />}
+                {!item.bulkEligible && (item.kind === 'fact' || item.kind === 'assessment') && (
+                  <Badge tone="amber" icon="alert">Individual review required</Badge>
+                )}
                 {item.extractionMethod && <MethodBadge method={item.extractionMethod as ExtractionMethod} />}
                 <span className="muted small">{relTime(item.date)}</span>
               </div>
+              {item.individualReviewReason && (
+                <p className="muted small" style={{ margin: 0 }}>{item.individualReviewReason}.</p>
+              )}
               <p className="soft small prewrap" style={{ margin: 0 }}>{item.title}</p>
               <p className="muted small" style={{ margin: 0 }}>{item.detail}</p>
 

@@ -7,10 +7,11 @@ import {
   RiskFlagBadge,
 } from '../../app/components/clinicalBadges';
 import { Badge, Card, EmptyState, Field } from '../../app/components/ui';
-import { getDefinition } from '../../core/assessments/definitions';
+import { computeRiskFlags, getDefinition } from '../../core/assessments/definitions';
 import { inputTypeLabel } from '../../core/db/schema';
 import {
   FACT_CATEGORIES,
+  bulkApprovalIneligibilityReason,
   factCategoryMeta,
   type FactCategory,
 } from '../../core/db/structuredSchema';
@@ -148,19 +149,36 @@ export function ExtractionPreviewScreen() {
     }
   };
 
-  const approveAllSafe = async () => {
+  /**
+   * Why a proposal is excluded from bulk approval (medication, diagnosis,
+   * risk content, flagged assessments), or null when eligible. Mirrors the
+   * policy the service layer enforces independently.
+   */
+  const individualReviewReason = (proposal: ProposalState): string | null => {
+    const { item } = proposal;
+    if (item.kind === 'fact') {
+      return bulkApprovalIneligibilityReason({
+        category: proposal.editedCategory ?? item.category,
+        riskRelated: item.riskRelated,
+        reviewStatus: 'pending',
+      });
+    }
+    const flags = computeRiskFlags({ definitionKey: item.definitionKey, totalScore: item.totalScore });
+    return flags.length > 0 ? 'Risk-flagged assessments require individual review' : null;
+  };
+
+  const approveAllEligible = async () => {
     for (let i = 0; i < proposals.length; i++) {
       const p = proposals[i];
-      const isRisk = p.item.kind === 'fact' && p.item.riskRelated;
-      if (!p.decision && !isRisk) {
+      if (!p.decision && individualReviewReason(p) === null) {
         await saveDecision(i, 'approved');
       }
     }
   };
 
   const undecided = proposals.filter((p) => !p.decision);
-  const undecidedSafe = undecided.filter((p) => !(p.item.kind === 'fact' && p.item.riskRelated));
-  const riskCount = proposals.filter((p) => p.item.kind === 'fact' && p.item.riskRelated).length;
+  const undecidedEligible = undecided.filter((p) => individualReviewReason(p) === null);
+  const individualCount = proposals.filter((p) => individualReviewReason(p) !== null).length;
 
   return (
     <div className="stack" style={{ maxWidth: 900 }}>
@@ -211,24 +229,26 @@ export function ExtractionPreviewScreen() {
           <div className="spread">
             <p className="muted small">
               {proposals.length} proposal{proposals.length === 1 ? '' : 's'} · {undecided.length} undecided
-              {riskCount > 0 && (
+              {individualCount > 0 && (
                 <span style={{ color: 'var(--red)', fontWeight: 600 }}>
-                  {' '}· {riskCount} risk item{riskCount === 1 ? '' : 's'} require individual review
+                  {' '}· {individualCount} item{individualCount === 1 ? ' requires' : 's require'} individual review
                 </span>
               )}
             </p>
             <button
               className="btn btn--secondary btn--sm"
-              disabled={undecidedSafe.length === 0}
-              onClick={() => void approveAllSafe()}
+              disabled={undecidedEligible.length === 0}
+              onClick={() => void approveAllEligible()}
+              title="Medication, diagnosis, risk-related, and flagged items are excluded and must be reviewed one by one."
             >
-              <Icon name="check" size={14} /> Approve all non-risk ({undecidedSafe.length})
+              <Icon name="check" size={14} /> Approve eligible low-risk items ({undecidedEligible.length})
             </button>
           </div>
 
           {proposals.map((proposal, index) => {
             const { item } = proposal;
             const isRiskFact = item.kind === 'fact' && item.riskRelated;
+            const reviewReason = individualReviewReason(proposal);
             return (
               <Card key={index} className={proposal.decision ? '' : isRiskFact ? '' : ''}>
                 <div className="stack-sm">
@@ -247,6 +267,9 @@ export function ExtractionPreviewScreen() {
                     )}
                     <ConfidenceBadge confidence={item.confidence} />
                     {isRiskFact && <RiskFlagBadge />}
+                    {reviewReason && !proposal.decision && (
+                      <Badge tone="amber" icon="alert">Individual review required</Badge>
+                    )}
                     {proposal.decision && (
                       <Badge
                         tone={proposal.decision === 'approved' ? 'green' : proposal.decision === 'rejected' ? 'red' : 'plum'}
@@ -256,6 +279,12 @@ export function ExtractionPreviewScreen() {
                       </Badge>
                     )}
                   </div>
+
+                  {reviewReason && !proposal.decision && (
+                    <p className="muted small" style={{ margin: 0 }}>
+                      {reviewReason} — excluded from “Approve eligible low-risk items”.
+                    </p>
+                  )}
 
                   {item.kind === 'fact' && proposal.decision === undefined ? (
                     <>

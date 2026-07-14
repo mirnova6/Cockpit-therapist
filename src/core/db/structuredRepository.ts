@@ -14,6 +14,7 @@ import type { EncryptedStore } from '../storage/encryptedStore';
 import { newId, nowIso, type AuditCategory } from './schema';
 import {
   APPROVED_STATUSES,
+  bulkApprovalIneligibilityReason,
   type AssessmentRecord,
   type ClinicalHypothesis,
   type Contradiction,
@@ -81,6 +82,10 @@ export interface QueueItem {
   date: string;
   riskRelated: boolean;
   extractionMethod?: string;
+  /** True only for facts that pass the bulk-approval policy. */
+  bulkEligible: boolean;
+  /** Why the item is excluded from bulk approval, when it is. */
+  individualReviewReason?: string;
 }
 
 export class StructuredRepository {
@@ -242,20 +247,28 @@ export class StructuredRepository {
   }
 
   /**
-   * Bulk approval for low-risk factual items ONLY. Risk-related facts are
-   * skipped and returned so the UI can route them to individual review.
+   * Bulk approval for ELIGIBLE low-risk factual items only, enforced here
+   * regardless of what the UI sends. Ineligible facts — anything
+   * risk-related, medication records, diagnoses, risk factors,
+   * withdrawal content, or items awaiting clarification — are skipped
+   * with a reason so the UI can route them to individual review.
+   * Assessments are never bulk-approvable through any path.
    */
   async bulkApproveFacts(
     ids: string[],
     author: string,
-  ): Promise<{ approved: string[]; skippedRisk: string[] }> {
+  ): Promise<{ approved: string[]; skipped: Array<{ id: string; reason: string }> }> {
     const approved: string[] = [];
-    const skippedRisk: string[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
     for (const id of ids) {
       const fact = await this.getFact(id);
-      if (!fact || fact.reviewStatus !== 'pending') continue;
-      if (fact.riskRelated) {
-        skippedRisk.push(id);
+      if (!fact) {
+        skipped.push({ id, reason: 'Fact not found' });
+        continue;
+      }
+      const reason = bulkApprovalIneligibilityReason(fact);
+      if (reason) {
+        skipped.push({ id, reason });
         continue;
       }
       await this.decideFact(id, 'approve', author, { note: 'bulk approval' });
@@ -264,9 +277,9 @@ export class StructuredRepository {
     await this.host.audit(
       'data',
       'fact.bulk-approve',
-      `by ${author}: ${approved.length} approved, ${skippedRisk.length} risk items skipped`,
+      `by ${author}: ${approved.length} approved, ${skipped.length} skipped as ineligible`,
     );
-    return { approved, skippedRisk };
+    return { approved, skipped };
   }
 
   // -------------------------------------------------------- assessments
@@ -636,16 +649,21 @@ export class StructuredRepository {
     const queue: QueueItem[] = [
       ...inClient(facts)
         .filter((f) => f.reviewStatus === 'pending' || f.reviewStatus === 'needs-clarification')
-        .map((f) => ({
-          kind: 'fact' as const,
-          id: f.id,
-          clientId: f.clientId,
-          title: f.statement,
-          detail: `Extracted fact · ${f.category}`,
-          date: f.updatedAt,
-          riskRelated: f.riskRelated,
-          extractionMethod: f.extractionMethod,
-        })),
+        .map((f) => {
+          const ineligibleReason = bulkApprovalIneligibilityReason(f);
+          return {
+            kind: 'fact' as const,
+            id: f.id,
+            clientId: f.clientId,
+            title: f.statement,
+            detail: `Extracted fact · ${f.category}`,
+            date: f.updatedAt,
+            riskRelated: f.riskRelated,
+            extractionMethod: f.extractionMethod,
+            bulkEligible: ineligibleReason === null,
+            individualReviewReason: ineligibleReason ?? undefined,
+          };
+        }),
       ...inClient(assessments)
         .filter((a) => a.reviewStatus === 'pending')
         .map((a) => ({
@@ -656,6 +674,8 @@ export class StructuredRepository {
           detail: `Assessment · ${a.dateAdministered}`,
           date: a.updatedAt,
           riskRelated: a.riskFlags.length > 0,
+          bulkEligible: false,
+          individualReviewReason: 'Assessments always require individual review',
         })),
       ...inClient(hypotheses)
         .filter((h) => h.reviewStatus === 'pending')
@@ -667,6 +687,7 @@ export class StructuredRepository {
           detail: `Hypothesis · ${h.category}`,
           date: h.updatedAt,
           riskRelated: false,
+          bulkEligible: false,
         })),
       ...inClient(evidence)
         .filter((e) => e.reviewStatus === 'pending')
@@ -678,6 +699,7 @@ export class StructuredRepository {
           detail: `Evidence link · ${e.relationship}`,
           date: e.createdAt,
           riskRelated: false,
+          bulkEligible: false,
         })),
       ...inClient(contradictions)
         .filter((c) => c.resolutionStatus === 'unresolved')
@@ -689,6 +711,7 @@ export class StructuredRepository {
           detail: 'Contradiction · unresolved',
           date: c.updatedAt,
           riskRelated: false,
+          bulkEligible: false,
         })),
       ...inClient(gaps)
         .filter((g) => g.status === 'open')
@@ -700,6 +723,7 @@ export class StructuredRepository {
           detail: `Needs further assessment · ${g.priority} priority`,
           date: g.updatedAt,
           riskRelated: false,
+          bulkEligible: false,
         })),
     ];
     return queue.sort(

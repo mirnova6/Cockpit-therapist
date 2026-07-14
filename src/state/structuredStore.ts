@@ -57,7 +57,10 @@ interface StructuredState {
   ) => Promise<void>;
   editFact: (id: string, clientId: string, patch: Partial<ExtractedFact>, reason: string) => Promise<void>;
   markFactHistorical: (id: string, clientId: string) => Promise<void>;
-  bulkApproveFacts: (ids: string[], clientId: string) => Promise<{ approved: string[]; skippedRisk: string[] }>;
+  bulkApproveFacts: (
+    ids: string[],
+    clientId: string,
+  ) => Promise<{ approved: string[]; skipped: Array<{ id: string; reason: string }> }>;
 
   createAssessment: (draft: AssessmentDraft, extraRiskFlags?: string[]) => Promise<AssessmentRecord>;
   decideAssessment: (id: string, clientId: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;

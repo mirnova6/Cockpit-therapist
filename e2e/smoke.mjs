@@ -149,12 +149,29 @@ try {
   await page.waitForSelector('text=proposals');
   check('assessment score proposed', await page.isVisible('text=Assessment score detected: PHQ-9 = 18'));
   check('capability note is honest', await page.isVisible('text=no AI model is connected'));
+  check(
+    'medication marked for individual review',
+    await page.isVisible('.badge:has-text("Individual review required")'),
+  );
   await page.screenshot({ path: `${OUT}08-extraction-preview.png` });
 
-  // Defer one fact for clarification, approve the rest.
-  await page.locator('button:has-text("Needs clarification")').first().click();
+  // Defer the quoted statement for clarification.
+  await page
+    .locator('.card', { hasText: 'burden to my family' })
+    .locator('button:has-text("Needs clarification")')
+    .click();
   await page.waitForSelector('.badge:has-text("Needs clarification")');
-  await page.click('button:has-text("Approve all non-risk")');
+
+  // Bulk approval covers ONLY eligible low-risk items; the medication
+  // proposal must remain undecided afterwards.
+  await page.click('button:has-text("Approve eligible low-risk items")');
+  await page.waitForSelector('button:has-text("Approve eligible low-risk items (0)")');
+  const medCard = page.locator('.card', { hasText: 'Sertraline 50 mg' }).first();
+  check(
+    'medication excluded from bulk approval',
+    await medCard.locator('button.btn--primary:has-text("Approve")').first().isVisible(),
+  );
+  await medCard.locator('button.btn--primary:has-text("Approve")').first().click();
   await page.waitForSelector('text=All proposals reviewed');
   check('extraction decisions complete', true);
 
@@ -163,12 +180,12 @@ try {
   await page.click('a:has-text("Structured profile")');
   await page.waitForSelector('text=Structured clinical profile');
   check('sleep fact in symptoms', await page.isVisible('text=insomnia most nights'));
-  check('quote captured as client report', await page.isVisible('text=burden to my family'));
-  // The medication fact was deferred as needs-clarification — the approved
-  // view must NOT show it, and the pending view must.
-  check('deferred fact hidden from approved profile', !(await page.isVisible('text=Sertraline 50 mg')));
+  check('individually approved medication in profile', await page.isVisible('text=Sertraline 50 mg'));
+  // The quote was deferred as needs-clarification — the approved view must
+  // NOT show it, and the pending view must.
+  check('deferred fact hidden from approved profile', !(await page.isVisible('text=burden to my family')));
   await page.click('button:has-text("Pending review")');
-  await page.waitForSelector('text=Sertraline 50 mg');
+  await page.waitForSelector('text=burden to my family');
   check('deferred fact visible in pending view', true);
   await page.click('button:has-text("Approved profile")');
   await page.screenshot({ path: `${OUT}09-structured-profile.png` });

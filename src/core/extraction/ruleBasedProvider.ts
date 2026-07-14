@@ -177,6 +177,32 @@ const RISK_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\bviolen\w*/gi, label: 'violence-related language' },
 ];
 
+/**
+ * Context qualifiers for risk keywords. Keyword matching cannot confirm
+ * current client risk: "denies suicidal ideation", "history of suicidal
+ * ideation", and "family member attempted suicide" all contain the same
+ * keyword with very different meanings. Every match is therefore labeled a
+ * POSSIBLE risk-related mention with the detected context, stays
+ * risk-related (individual review only), and is never worded as confirmed.
+ */
+function riskContextQualifier(sentence: string, matchStart: number): string {
+  const before = sentence.slice(0, Math.max(0, matchStart)).toLowerCase();
+  // Negation must sit within a few words BEFORE the keyword ("denies SI",
+  // "no current suicidal ideation") — "SI without plan" is NOT a denial.
+  const negationNear =
+    /\b(denies|denied|denying|no|without|never|negative for|not|reports? no|does not endorse|not endorsing)\s+(?:[\w-]+\s+){0,3}$/;
+  if (negationNear.test(before)) {
+    return 'text suggests denial or negation';
+  }
+  if (/\b(history of|hx of|previously|prior|in the past|years ago|as a (child|teen|teenager)|when (he|she|they) (was|were) (young|a child|a teenager))\b/i.test(sentence)) {
+    return 'text suggests a historical reference';
+  }
+  if (/\b(mother|father|mom|dad|parent|brother|sister|sibling|son|daughter|uncle|aunt|grandmother|grandfather|cousin|friend|partner|husband|wife|spouse|roommate|coworker|family member)(['’]s)?\b/.test(before)) {
+    return 'text may refer to a third party, not the client';
+  }
+  return 'context not determined by pattern matching';
+}
+
 function extractRiskStatements(text: string, classification: SourceClassification): ProposedFact[] {
   const facts: ProposedFact[] = [];
   const seenSentences = new Set<string>();
@@ -185,10 +211,14 @@ function extractRiskStatements(text: string, classification: SourceClassificatio
       const sentence = sentenceAround(text, match.index ?? 0, match[0].length);
       if (seenSentences.has(sentence)) continue;
       seenSentences.add(sentence);
+      const idxInSentence = sentence.toLowerCase().indexOf(match[0].toLowerCase());
+      const qualifier = riskContextQualifier(sentence, Math.max(0, idxInSentence));
       facts.push({
         kind: 'fact',
         category: 'risk-factor',
-        statement: `Possible risk content (${label}) — clinician must review: "${sentence}"`,
+        statement:
+          `Possible risk-related mention (${label}; ${qualifier}) — ` +
+          `requires contextual clinician review, not a confirmed current risk: "${sentence}"`,
         excerpt: sentence,
         sourceLocation: lineNumberOf(text, match.index ?? 0),
         classification,

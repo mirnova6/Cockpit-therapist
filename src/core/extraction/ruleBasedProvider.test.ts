@@ -77,6 +77,49 @@ describe('ruleBasedProvider', () => {
     expect(risk[0].excerpt).toContain('suicidal ideation');
   });
 
+  it('never words keyword matches as confirmed risk', () => {
+    const result = ruleBasedProvider.extract(
+      input('Client endorsed suicidal ideation with plan. Reports self-harm urges.'),
+    );
+    const risk = facts(result.items).filter((f) => f.riskRelated);
+    expect(risk.length).toBeGreaterThan(0);
+    for (const fact of risk) {
+      expect(fact.statement).toContain('Possible risk-related mention');
+      expect(fact.statement).toContain('not a confirmed current risk');
+      expect(fact.statement.toLowerCase()).not.toContain('confirmed risk:');
+    }
+  });
+
+  it('labels denial statements as denial/negation context, still requiring review', () => {
+    const result = ruleBasedProvider.extract(input('Client denies suicidal ideation at this time.'));
+    const risk = facts(result.items).filter((f) => f.riskRelated);
+    expect(risk).toHaveLength(1);
+    expect(risk[0].statement).toContain('denial or negation');
+    expect(risk[0].riskRelated).toBe(true); // still individual review only
+  });
+
+  it('labels historical mentions as historical context', () => {
+    const result = ruleBasedProvider.extract(input('Client shared a history of suicidal ideation in college.'));
+    const risk = facts(result.items).filter((f) => f.riskRelated);
+    expect(risk).toHaveLength(1);
+    expect(risk[0].statement).toContain('historical reference');
+  });
+
+  it('labels third-party mentions as possibly not about the client', () => {
+    const result = ruleBasedProvider.extract(input("Client's mother attempted suicide when the client was young."));
+    const risk = facts(result.items).filter((f) => f.riskRelated);
+    expect(risk).toHaveLength(1);
+    expect(risk[0].statement).toContain('third party');
+  });
+
+  it('does not mislabel "SI without plan" as a denial', () => {
+    const result = ruleBasedProvider.extract(input('Client reported passive suicidal ideation without plan.'));
+    const risk = facts(result.items).filter((f) => f.riskRelated);
+    expect(risk).toHaveLength(1);
+    expect(risk[0].statement).not.toContain('denial or negation');
+    expect(risk[0].statement).toContain('context not determined');
+  });
+
   it('extracts quoted client statements', () => {
     const result = ruleBasedProvider.extract(input('Client said “I feel like a burden to everyone around me.”'));
     const quotes = facts(result.items).filter((f) => f.statement.startsWith('Client statement'));

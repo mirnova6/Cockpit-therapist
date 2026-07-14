@@ -233,8 +233,93 @@ describe('StructuredRepository — review workflow', () => {
 
     const result = await db.structured.bulkApproveFacts([safe1.id, safe2.id, risky.id], 'Dr. Kim');
     expect(result.approved.sort()).toEqual([safe1.id, safe2.id].sort());
-    expect(result.skippedRisk).toEqual([risky.id]);
+    expect(result.skipped.map((s) => s.id)).toEqual([risky.id]);
+    expect(result.skipped[0].reason).toMatch(/individual review/i);
     expect((await db.structured.getFact(risky.id))?.reviewStatus).toBe('pending');
+  });
+
+  it('bulk approval rejects medication and diagnosis facts even when riskRelated is false', async () => {
+    const client = await makeClient('C');
+    const input = await makeInput(client.id);
+    const medication = await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Sertraline 50 mg', category: 'medication', riskRelated: false }),
+      'Dr. Kim',
+    );
+    const diagnosis = await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Dx: F41.1', category: 'diagnosis', riskRelated: false }),
+      'Dr. Kim',
+    );
+    const withdrawal = await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Reports withdrawal symptoms', category: 'withdrawal', riskRelated: false }),
+      'Dr. Kim',
+    );
+    const eligible = await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Sleeping 4-5 hours', category: 'sleep', riskRelated: false }),
+      'Dr. Kim',
+    );
+
+    const result = await db.structured.bulkApproveFacts(
+      [medication.id, diagnosis.id, withdrawal.id, eligible.id],
+      'Dr. Kim',
+    );
+
+    expect(result.approved).toEqual([eligible.id]);
+    expect(result.skipped.map((s) => s.id).sort()).toEqual(
+      [medication.id, diagnosis.id, withdrawal.id].sort(),
+    );
+    expect(result.skipped.find((s) => s.id === medication.id)?.reason).toMatch(/Medication/);
+    expect(result.skipped.find((s) => s.id === diagnosis.id)?.reason).toMatch(/Diagnos/);
+    // Ineligible facts remain untouched and pending — the service layer is
+    // the enforcement point, independent of any UI state.
+    expect((await db.structured.getFact(medication.id))?.reviewStatus).toBe('pending');
+    expect((await db.structured.getFact(diagnosis.id))?.reviewStatus).toBe('pending');
+    expect((await db.structured.getFact(withdrawal.id))?.reviewStatus).toBe('pending');
+    expect((await db.structured.getFact(eligible.id))?.reviewStatus).toBe('approved');
+  });
+
+  it('bulk approval skips facts awaiting clarification', async () => {
+    const client = await makeClient('C');
+    const input = await makeInput(client.id);
+    const fact = await db.structured.createFact(factDraft(client.id, input.id), 'Dr. Kim');
+    await db.structured.decideFact(fact.id, 'needs-clarification', 'Dr. Kim');
+
+    const result = await db.structured.bulkApproveFacts([fact.id], 'Dr. Kim');
+    expect(result.approved).toHaveLength(0);
+    expect(result.skipped[0].reason).toMatch(/clarification/i);
+    expect((await db.structured.getFact(fact.id))?.reviewStatus).toBe('needs-clarification');
+  });
+
+  it('queue marks medication/diagnosis facts and assessments as individually reviewable', async () => {
+    const client = await makeClient('C');
+    const input = await makeInput(client.id);
+    await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Sertraline 50 mg', category: 'medication' }),
+      'Dr. Kim',
+    );
+    await db.structured.createFact(
+      factDraft(client.id, input.id, { statement: 'Sleeps poorly', category: 'sleep' }),
+      'Dr. Kim',
+    );
+    await db.structured.createAssessment(
+      {
+        clientId: client.id,
+        definitionKey: 'phq9',
+        name: 'PHQ-9',
+        dateAdministered: '2026-07-01',
+        totalScore: 9,
+        reviewStatus: 'pending',
+      },
+      'Dr. Kim',
+    );
+
+    const queue = await db.structured.listQueue(client.id);
+    const medItem = queue.find((q) => q.title === 'Sertraline 50 mg');
+    const sleepItem = queue.find((q) => q.title === 'Sleeps poorly');
+    const assessmentItem = queue.find((q) => q.kind === 'assessment');
+    expect(medItem?.bulkEligible).toBe(false);
+    expect(medItem?.individualReviewReason).toMatch(/Medication/);
+    expect(sleepItem?.bulkEligible).toBe(true);
+    expect(assessmentItem?.bulkEligible).toBe(false);
   });
 
   it('approved facts retain evidence links back to their source', async () => {
@@ -305,6 +390,16 @@ describe('StructuredRepository — assessments', () => {
     );
     expect(withNote.riskFlags).toContain('suicidal-ideation');
     expect(withNote.severityInterpretation).toContain('full risk assessment');
+  });
+
+  it('a severe PHQ-9 total alone creates no risk flag and needs no disposition', async () => {
+    const client = await makeClient('C');
+    const record = await db.structured.createAssessment(
+      { clientId: client.id, definitionKey: 'phq9', name: 'PHQ-9', dateAdministered: '2026-07-10', totalScore: 27 },
+      'Dr. Kim',
+    );
+    expect(record.riskFlags).toEqual([]);
+    expect(record.severityInterpretation).toContain('Severe');
   });
 
   it('PHQ-9 item 9 endorsement adds a risk flag requiring disposition', async () => {

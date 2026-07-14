@@ -101,6 +101,14 @@ describe('assessment scoring rules', () => {
     expect(computeRiskFlags(none)).toEqual([]);
   });
 
+  it('a PHQ-9 total score alone never creates an item-9 risk flag', () => {
+    // Item 9 can only be flagged from explicit item-level entry (the
+    // riskQuestion checkbox), never inferred from the total.
+    for (const totalScore of [0, 9, 14, 20, 27]) {
+      expect(computeRiskFlags({ definitionKey: 'phq9', totalScore })).toEqual([]);
+    }
+  });
+
   it('computes change vs the chronologically previous score', () => {
     const first = record({ dateAdministered: '2026-06-01', totalScore: 18 });
     const second = record({ dateAdministered: '2026-07-01', totalScore: 11 });

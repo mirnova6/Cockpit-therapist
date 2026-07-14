@@ -34,6 +34,52 @@ export function reviewStatusLabel(status: ReviewStatus): string {
 /** Statuses that count as part of the approved clinical record. */
 export const APPROVED_STATUSES: ReviewStatus[] = ['approved', 'edited'];
 
+// ------------------------------------------------ bulk-approval policy
+
+/**
+ * Categories that must ALWAYS go through individual clinician review,
+ * even when the fact itself is not flagged risk-related:
+ * medication records/changes, diagnoses/diagnostic changes, risk factors
+ * (suicidal ideation, self-harm, violence, psychosis, abuse/neglect all
+ * arrive as risk-factor and/or riskRelated), and intoxication/withdrawal.
+ */
+export const BULK_EXCLUDED_CATEGORIES: ReadonlyArray<string> = [
+  'medication',
+  'diagnosis',
+  'risk-factor',
+  'withdrawal',
+];
+
+/**
+ * Single source of truth for bulk-approval eligibility, shared by the
+ * service layer (which enforces it regardless of the UI) and the UI
+ * (which uses it for labels and selection affordances).
+ * Returns a human-readable reason when ineligible, or null when eligible.
+ */
+export function bulkApprovalIneligibilityReason(fact: {
+  category: string;
+  riskRelated: boolean;
+  reviewStatus: ReviewStatus;
+}): string | null {
+  if (fact.riskRelated) return 'Risk-related content requires individual review';
+  if (BULK_EXCLUDED_CATEGORIES.includes(fact.category)) {
+    const label =
+      fact.category === 'medication'
+        ? 'Medication records'
+        : fact.category === 'diagnosis'
+          ? 'Diagnoses'
+          : fact.category === 'withdrawal'
+            ? 'Withdrawal-related content'
+            : 'Risk factors';
+    return `${label} require individual review`;
+  }
+  if (fact.reviewStatus === 'needs-clarification') {
+    return 'Items awaiting clarification require individual review';
+  }
+  if (fact.reviewStatus !== 'pending') return 'Only pending items can be bulk-approved';
+  return null;
+}
+
 // ------------------------------------------------- source classification
 
 export type SourceClassification =
