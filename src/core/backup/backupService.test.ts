@@ -136,6 +136,34 @@ describe('backupService', () => {
       { clientId: client.id, definitionKey: 'phq9', name: 'PHQ-9', dateAdministered: '2026-07-01', totalScore: 9 },
       'Dr. Osei',
     );
+    // Phase 3 records ride the same encrypted envelope format.
+    const goal = await sourceDb.documents.createGoal(
+      { clientId: client.id, kind: 'short-term', title: 'Sleep goal', status: 'active', objectives: [] },
+      'Dr. Osei',
+    );
+    const note = await sourceDb.documents.createDapNote(
+      {
+        clientId: client.id,
+        sessionDate: '2026-07-01',
+        levelOfCare: 'outpatient',
+        style: 'standard',
+        segments: [
+          { id: 's1', section: 'data', text: 'Backup segment content', kind: 'therapist-authored', sources: [], riskRelated: false },
+        ],
+        sourceSelection: {
+          inputIds: [input.id], factIds: [], assessmentIds: [], hypothesisIds: [], goalIds: [goal.id],
+          includeDiagnoses: true, includeMedications: false, includeRiskStatus: false, riskConfirmed: false,
+          explicitlyIncludedPendingFactIds: [], style: 'standard',
+        },
+        generation: {
+          method: 'deterministic-template', providerId: 'deterministic-template',
+          providerLabel: 'Deterministic Template Generator', generatedAt: '2026-07-01T00:00:00Z',
+          disclosure: 'test', warnings: [],
+        },
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.documents.decideDapNote(note.id, 'approve', 'Dr. Osei');
 
     const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
     const dump = JSON.stringify(backup.records);
@@ -163,6 +191,17 @@ describe('backupService', () => {
     expect(assessments[0].severityInterpretation).toContain('Mild');
     const versions = await restored.structured.listVersions(restoredClient.id, 'fact', facts[0].id);
     expect(versions.length).toBeGreaterThanOrEqual(1);
+
+    // Phase 3 relationships intact after restore
+    const restoredGoals = await restored.documents.listGoals(restoredClient.id);
+    expect(restoredGoals.map((g) => g.title)).toEqual(['Sleep goal']);
+    const restoredNotes = await restored.documents.listDapNotes(restoredClient.id);
+    expect(restoredNotes).toHaveLength(1);
+    expect(restoredNotes[0].reviewStatus).toBe('approved');
+    expect(restoredNotes[0].sourceSelection.goalIds).toEqual([restoredGoals[0].id]);
+    expect(restoredNotes[0].segments[0].text).toBe('Backup segment content');
+    // …and never in plaintext inside the backup
+    expect(dump).not.toContain('Backup segment content');
   });
 
   it('rejects invalid backup files', async () => {

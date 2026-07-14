@@ -4,6 +4,7 @@
  */
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
+import { DocumentsRepository } from './documentsRepository';
 import { StructuredRepository } from './structuredRepository';
 import {
   DEFAULT_PREFS,
@@ -43,12 +44,18 @@ export class ClinicalDatabase {
   readonly store: EncryptedStore;
   /** Phase 2 structured clinical data (facts, assessments, hypotheses, …). */
   readonly structured: StructuredRepository;
+  /** Phase 3 clinical documents (DAP notes, treatment plans, goals). */
+  readonly documents: DocumentsRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
     dek: CryptoKey,
   ) {
     this.store = new EncryptedStore(adapter, dek);
+    this.documents = new DocumentsRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
     this.structured = new StructuredRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
@@ -142,6 +149,7 @@ export class ClinicalDatabase {
 
   /** Permanently removes the client and every associated record and blob. */
   async deleteClient(id: string, author: string): Promise<void> {
+    await this.documents.deleteAllForClient(id);
     await this.structured.deleteAllForClient(id);
     const inputs = await this.listInputsForClient(id, { includeArchived: true });
     for (const input of inputs) {

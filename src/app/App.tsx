@@ -10,6 +10,12 @@ import { InputDetailScreen } from '../features/inputs/InputDetailScreen';
 import { InputsListTab } from '../features/inputs/InputsListTab';
 import { TimelineTab } from '../features/inputs/TimelineTab';
 import { AssessmentsTab } from '../features/assessments/AssessmentsTab';
+import { DapNoteScreen } from '../features/documents/DapNoteScreen';
+import { DapNotesTab } from '../features/documents/DapNotesTab';
+import { DocumentsTab } from '../features/documents/DocumentsTab';
+import { PlanScreen } from '../features/documents/PlanScreen';
+import { PlanTab } from '../features/documents/PlanTab';
+import { GoalsTab } from '../features/goals/GoalsTab';
 import { EvidenceTab } from '../features/evidence/EvidenceTab';
 import { ExtractionPreviewScreen } from '../features/extraction/ExtractionPreviewScreen';
 import { HypothesesTab } from '../features/hypotheses/HypothesesTab';
@@ -57,6 +63,12 @@ export function App() {
         <Route path="assessments" element={<AssessmentsTab />} />
         <Route path="hypotheses" element={<HypothesesTab />} />
         <Route path="evidence" element={<EvidenceTab />} />
+        <Route path="dap" element={<DapNotesTab />} />
+        <Route path="dap/:noteId" element={<DapNoteScreen />} />
+        <Route path="plan" element={<PlanTab />} />
+        <Route path="plan/:planId" element={<PlanScreen />} />
+        <Route path="goals" element={<GoalsTab />} />
+        <Route path="documents" element={<DocumentsTab />} />
         <Route path="review" element={<ReviewQueueTab />} />
         <Route path="timeline" element={<TimelineTab />} />
         <Route path="settings" element={<ClientSettingsTab />} />

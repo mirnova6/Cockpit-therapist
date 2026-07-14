@@ -16,7 +16,7 @@ infrastructure, agreements, and legal review.
 | --- | --- | --- |
 | **1 — Foundation** | Authentication, encrypted client database, Choose Client screen, client dashboard, clinical input storage, risk-flag review, change history, backup/restore, auto-lock | ✅ **Complete & tested** |
 | **2 — Structured clinical data** | Extracted facts with rule-based extraction preview, assessment tracking with official scoring rules, hypotheses, evidence links, contradictions & missing-information tracking, review queue, version history, structured profile | ✅ **Complete & tested** |
-| 3 — Documentation | DAP generator, treatment plan generator, clinician review UI, exporting | Not started |
+| **3 — Documentation** | DAP note generator, Master Treatment Plan generator, goals & objectives editor, per-segment evidence linking, document review/approval with risk gating, version comparison, approved-only export | ✅ **Complete & tested** |
 | 4 — Clinical intelligence | Client-record + knowledge retrieval (RAG), reasoning pipeline, formulation updates, intervention recommendations | Not started |
 | 5 — Quality & security | Clinical AI evaluation, hallucination checks, prompt-injection protection, expanded audit, online mode | Not started |
 
@@ -95,6 +95,42 @@ metadata and labeled honestly in the UI.
 - **Version history** — every mutation snapshots the prior state with reason,
   author, date, and review decision; side-by-side Previous/Current comparison
   labeled in text, not color alone.
+
+## What works in Phase 3
+
+- **Document generation behind a replaceable provider seam** — the
+  `DocumentGenerationProvider` interface (`src/core/documents/`) ships with a
+  Deterministic Template Generator; every draft displays: "This draft was assembled
+  from approved client information using deterministic templates. Advanced AI
+  generation is not connected yet." Phase 4 AI providers register in the same
+  registry with no schema/workflow/UI changes.
+- **Source selection with hard rules** — approved information by default; pending
+  facts require explicit opt-in (warned + labeled "PENDING" in the draft); rejected/
+  superseded information is impossible to include; risk-related sources require an
+  explicit confirmation; all enforced in the context assembler, not just the UI, with
+  cross-client selection rejected outright.
+- **Segment-based documents** — every generated sentence is a segment carrying its
+  evidence (source, excerpt, date, classification) and factual/interpretive/template/
+  therapist-authored kind. Unsupported claims are flagged "Unsupported draft content".
+  Clinicians edit/delete/add segments; the original generated draft is frozen forever.
+- **DAP notes** — Data/Assessment/Plan sections, 12 styles (emphasis + length; facts
+  never change), no invented mental-status observations, hypothesis content always
+  labeled as hypothesis, autosaving draft editor.
+- **Master Treatment Plans** — problem statements (screening scores explicitly marked
+  "not a diagnosis"), evidence-linked Evidenced-By, deterministic formulation sections,
+  ranked hierarchy of documented needs, goal plan, and proposed objective skeletons
+  that flag missing baselines/targets/dates instead of inventing them. Approving a new
+  plan supersedes the prior approved plan with full history.
+- **Goals & objectives editor** — measurable-component fields (measurement method,
+  baseline, target, dates, linked assessment), vague-wording warnings, therapist plans,
+  progress tracking with notes, reorder/duplicate/status lifecycle, versioned edits.
+- **Risk-gated review** — risk segments/problems/needs each require individual
+  clinician confirmation (with disposition note) before a document can be approved;
+  the repository enforces this regardless of UI. No bulk document approval exists.
+- **Export** — approved documents only (copy / plain text / structured JSON / print
+  view → PDF); drafts get watermarked print previews reading "DRAFT — NOT CLINICIAN
+  APPROVED"; identifier format and content options; every export audited; no internal
+  instructions or encryption material ever exported.
 
 ## Security model
 

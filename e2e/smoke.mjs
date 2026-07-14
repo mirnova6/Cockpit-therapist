@@ -220,6 +220,96 @@ try {
   await page.waitForSelector('text=Review queue is clear');
   check('queue clears after approval', true);
 
+  // ------------------------------------------------ Phase 3: goals editor
+  console.log('Phase 3: goals & objectives');
+  await page.click('a:has-text("Goals")');
+  await page.click('button:has-text("New goal")');
+  await page.waitForSelector('text=New treatment goal');
+  await page.fill('input[placeholder="e.g. Reduce panic episode frequency"]', 'Improve sleep consistency');
+  await page.locator('.modal textarea').nth(1).fill('Client will track nightly sleep hours in a log and report weekly.');
+  await page.click('button:has-text("Create goal")');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  await page.waitForSelector('text=Improve sleep consistency');
+  check('missing baseline/target flagged on objective', await page.isVisible('text=Needs completion'));
+  check('baseline flag specific', await page.isVisible('text=Baseline not documented'));
+
+  // ------------------------------------------------ Phase 3: DAP generator
+  console.log('Phase 3: DAP note generator');
+  await page.click('a:has-text("DAP notes")');
+  await page.click('button:has-text("New DAP note")');
+  await page.waitForSelector('text=select sources');
+  // Select the risk-flagged session transcript → confirmation becomes required
+  await page.locator('.checkbox-row', { hasText: 'Session transcript' }).locator('input').first().check();
+  await page.waitForSelector('text=I confirm the inclusion');
+  check('risk source requires explicit confirmation', true);
+  await page.click('button:has-text("Select all approved")');
+  await page.locator('.card', { hasText: 'Assessments (' }).locator('.checkbox-row input').first().check();
+  await page.locator('.checkbox-row', { hasText: 'I confirm the inclusion' }).locator('input').check();
+  await page.click('button:has-text("Generate draft")');
+
+  await page.waitForSelector('text=deterministic templates');
+  check('honest generation disclosure shown', true);
+  check('risk segments demand confirmation', await page.isVisible('text=require your individual confirmation'));
+  await page.screenshot({ path: `${OUT}11-dap-draft.png` });
+
+  // Approval must fail while risk segments are unconfirmed
+  await page.locator('.card', { hasText: 'Clinician review' }).locator('button:has-text("Approve")').first().click();
+  await page.waitForSelector('text=individual clinician confirmation');
+  check('approval blocked until risk confirmed', true);
+
+  // Confirm each risk segment individually
+  while ((await page.locator('button:has-text("Confirm this risk content")').count()) > 0) {
+    await page.locator('button:has-text("Confirm this risk content")').first().click();
+    await page.waitForTimeout(300);
+  }
+  check('all risk segments confirmed', true);
+
+  // Edit a segment (clinician edit preserved separately from original draft)
+  await page.locator('button:has-text("Edit")').first().click();
+  const segEdit = page.locator('textarea').first();
+  await segEdit.fill((await segEdit.inputValue()) + ' Clinician clarification added.');
+  await page.locator('button:has-text("Save")').first().click();
+  await page.waitForTimeout(1200); // autosave debounce
+
+  await page.locator('.card', { hasText: 'Clinician review' }).locator('button:has-text("Approve")').first().click();
+  await page.waitForSelector('.badge:has-text("Clinician edited & approved")');
+  check('edited note approved with edit status', true);
+
+  // Export the approved note as structured JSON
+  await page.locator('button:has-text("Export")').first().click();
+  await page.waitForSelector('text=unencrypted');
+  await page.locator('.checkbox-row', { hasText: 'I understand this export' }).locator('input').check();
+  const downloadPromise = page.waitForEvent('download');
+  await page.click('button:has-text("Structured JSON")');
+  const download = await downloadPromise;
+  check('approved note exports as JSON', Boolean(download.suggestedFilename().endsWith('.json')));
+  await page.keyboard.press('Escape');
+
+  // -------------------------------------------- Phase 3: treatment plan
+  console.log('Phase 3: treatment plan generator');
+  await page.click('a:has-text("Treatment plan")');
+  await page.click('button:has-text("New plan")');
+  await page.waitForSelector('text=select sources');
+  await page.click('button:has-text("Select all approved")');
+  await page.locator('.card', { hasText: 'Assessments (' }).locator('.checkbox-row input').first().check();
+  await page.locator('.card', { hasText: 'Treatment goals' }).locator('.checkbox-row input').first().check();
+  await page.click('button:has-text("Generate plan draft")');
+
+  await page.waitForSelector('text=Holistic clinical formulation');
+  check('screening score not converted to diagnosis', await page.isVisible('text=Screening result, not a diagnosis'));
+  check('proposed objectives flag clinician input', await page.isVisible('text=Clinician input required'));
+  check('linked goal shows completion flags', await page.isVisible('text=Needs completion'));
+  await page.screenshot({ path: `${OUT}12-treatment-plan.png` });
+
+  await page.locator('.card', { hasText: 'Clinician review' }).locator('button:has-text("Approve plan")').click();
+  await page.waitForSelector('.badge:has-text("Clinician approved")');
+  check('treatment plan approved', true);
+
+  // ---------------------------------------------- Phase 3: documents tab
+  await page.click('a:has-text("Documents")');
+  await page.waitForSelector('h2:has-text("Documents")');
+  check('documents tab lists both documents', (await page.locator('.list-row').count()) >= 2);
+
   // -------------------------- app close + reopen (fresh JS context)
   // Simulates quitting and relaunching the app: a brand-new page has no
   // in-memory state, so everything shown must come from IndexedDB.
@@ -249,6 +339,14 @@ try {
   await page2.click('a:has-text("Assessments")');
   await page2.waitForSelector('text=PHQ-9');
   check('assessment + interpretation persist after relaunch', await page2.isVisible('text=Moderately severe'));
+
+  // Phase 3 documents persist across app relaunch
+  await page2.click('a:has-text("DAP notes")');
+  await page2.waitForSelector('.badge:has-text("Clinician edited & approved")');
+  check('approved DAP note persists after relaunch', true);
+  await page2.click('a:has-text("Treatment plan")');
+  await page2.waitForSelector('.badge:has-text("Clinician approved")');
+  check('approved treatment plan persists after relaunch', true);
   const page3 = page2;
 
   // ------------------------------------- encrypted-at-rest spot check

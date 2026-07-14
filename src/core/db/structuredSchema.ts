@@ -485,7 +485,10 @@ export type VersionedEntityType =
   | 'hypothesis'
   | 'evidence'
   | 'contradiction'
-  | 'gap';
+  | 'gap'
+  | 'dap-note'
+  | 'treatment-plan'
+  | 'goal';
 
 export interface VersionRecord {
   id: string;
