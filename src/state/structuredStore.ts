@@ -66,7 +66,11 @@ interface StructuredState {
   decideAssessment: (id: string, clientId: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
   updateAssessment: (id: string, clientId: string, patch: Partial<AssessmentRecord>, reason: string) => Promise<void>;
 
-  createHypothesis: (draft: HypothesisDraft) => Promise<ClinicalHypothesis>;
+  createHypothesis: (
+    draft: HypothesisDraft,
+    opts?: { reviewStatus?: 'pending' | 'approved' },
+  ) => Promise<ClinicalHypothesis>;
+  decideHypothesis: (id: string, clientId: string, decision: 'approve' | 'reject') => Promise<void>;
   updateHypothesis: (id: string, clientId: string, patch: Partial<ClinicalHypothesis>, reason: string) => Promise<void>;
   setHypothesisLifecycle: (
     id: string,
@@ -178,11 +182,17 @@ export const useStructuredStore = create<StructuredState>((set, get) => {
       await reload(clientId);
     },
 
-    createHypothesis: async (draft) => {
+    createHypothesis: async (draft, opts) => {
       const db = authService.require();
-      const hypothesis = await db.structured.createHypothesis(draft, await author());
+      const hypothesis = await db.structured.createHypothesis(draft, await author(), opts);
       await reload(draft.clientId);
       return hypothesis;
+    },
+
+    decideHypothesis: async (id, clientId, decision) => {
+      const db = authService.require();
+      await db.structured.decideHypothesis(id, decision, await author());
+      await reload(clientId);
     },
 
     updateHypothesis: async (id, clientId, patch, reason) => {

@@ -24,9 +24,9 @@ import { inputTypeLabel, newId, nowIso, riskLabel } from '../db/schema';
 import { classificationLabel, factCategoryMeta } from '../db/structuredSchema';
 import type {
   DapGenerationResult,
-  DocumentGenerationProvider,
   GenerationContext,
   PlanGenerationResult,
+  SyncDocumentGenerationProvider,
 } from './generationTypes';
 import { warning } from './generationTypes';
 
@@ -667,7 +667,7 @@ function buildInfo(warnings: GenerationWarning[]): GenerationInfo {
   };
 }
 
-export const templateProvider: DocumentGenerationProvider = {
+export const templateProvider: SyncDocumentGenerationProvider = {
   id: 'deterministic-template',
   label: 'Deterministic Template Generator',
   disclosure: TEMPLATE_DISCLOSURE,

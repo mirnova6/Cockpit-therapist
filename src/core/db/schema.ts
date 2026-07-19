@@ -240,6 +240,8 @@ export interface AuditEvent {
 
 export interface UserPrefs {
   recentlyViewed: Array<{ clientId: string; at: string }>;
+  /** Formulation frameworks the clinician has enabled (default: all). */
+  enabledFrameworks?: string[];
 }
 
 export const DEFAULT_PREFS: UserPrefs = { recentlyViewed: [] };

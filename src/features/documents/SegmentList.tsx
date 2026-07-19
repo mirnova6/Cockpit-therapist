@@ -133,6 +133,14 @@ export function SegmentList({
               <Badge tone={kind.tone}>{kind.label}</Badge>
               {segment.fromPendingSource && <Badge tone="amber" icon="clock">From pending source</Badge>}
               {unsupported && <Badge tone="red" icon="alert">Unsupported draft content</Badge>}
+              {segment.verification &&
+                (segment.verification.status === 'unsupported' ||
+                  segment.verification.status === 'contradicted' ||
+                  segment.verification.status === 'needs-clarification') && (
+                  <Badge tone="red" icon="alert">
+                    Verification: {segment.verification.status.replace(/-/g, ' ')}
+                  </Badge>
+                )}
               {segment.riskRelated && (
                 <Badge tone={segment.riskAcknowledged ? 'amber' : 'red'} icon="alert">
                   {segment.riskAcknowledged ? 'Risk — confirmed' : 'Risk — confirmation required'}

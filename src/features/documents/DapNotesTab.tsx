@@ -5,8 +5,10 @@ import { Badge, Card, EmptyState, Field } from '../../app/components/ui';
 import { DAP_STYLES, DOC_STATUS_LABELS, EMPTY_SELECTION, type SourceSelection } from '../../core/db/documentSchema';
 import { LEVELS_OF_CARE } from '../../core/db/schema';
 import { fmtDate, todayIsoDate } from '../../lib/format';
+import { useAiStore } from '../../state/aiStore';
 import { useDocumentsStore } from '../../state/documentsStore';
 import type { ClientContext } from '../dashboard/ClientDashboardLayout';
+import { AiGeneratorPicker, DEFAULT_DOCUMENT_PROVIDER_ID } from './AiGeneratorPicker';
 import { SourceSelectionPanel } from './SourceSelectionPanel';
 import { statusTone } from './docShared';
 
@@ -23,6 +25,12 @@ export function DapNotesTab() {
   const [sessionNumber, setSessionNumber] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [providerId, setProviderId] = useState(DEFAULT_DOCUMENT_PROVIDER_ID);
+  const [onlineConfirmed, setOnlineConfirmed] = useState(false);
+  const aiSettings = useAiStore((s) => s.settings);
+  const setStoreOnlineConfirmed = useAiStore((s) => s.setOnlineConfirmed);
+  const onlineGate =
+    providerId !== DEFAULT_DOCUMENT_PROVIDER_ID && aiSettings.activeProviderType === 'online';
 
   useEffect(() => {
     void loadClient(client.id);
@@ -34,17 +42,21 @@ export function DapNotesTab() {
   const generate = async () => {
     setError(undefined);
     setBusy(true);
+    if (onlineGate) setStoreOnlineConfirmed(onlineConfirmed);
     try {
       const note = await generateDapNote(client.id, selection, {
         sessionDate,
         sessionNumber: sessionNumber ? Number(sessionNumber) : undefined,
         levelOfCare: client.levelOfCare,
         style: selection.style,
+        providerId,
       });
       navigate(note.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed.');
       setBusy(false);
+    } finally {
+      setStoreOnlineConfirmed(false);
     }
   };
 
@@ -78,6 +90,18 @@ export function DapNotesTab() {
 
         <SourceSelectionPanel clientId={client.id} docType="dap-note" selection={selection} onChange={setSelection} />
 
+        <Card title="Generator" icon="activity">
+          <AiGeneratorPicker
+            clientId={client.id}
+            clientNames={[client.displayName, client.preferredIdentifier ?? ''].filter(Boolean)}
+            selection={selection}
+            providerId={providerId}
+            onProviderChange={setProviderId}
+            onlineConfirmed={onlineConfirmed}
+            setOnlineConfirmed={setOnlineConfirmed}
+          />
+        </Card>
+
         {error && (
           <div className="notice notice--danger" role="alert">
             <Icon name="alert" size={16} />
@@ -86,10 +110,9 @@ export function DapNotesTab() {
         )}
 
         <div className="cluster">
-          <button className="btn btn--primary" disabled={busy} onClick={() => void generate()}>
-            <Icon name="file" size={15} /> Generate draft
+          <button className="btn btn--primary" disabled={busy || (onlineGate && !onlineConfirmed)} onClick={() => void generate()}>
+            <Icon name="file" size={15} /> {busy ? 'Generating…' : 'Generate draft'}
           </button>
-          <span className="muted small">Deterministic template generator — no AI model is connected.</span>
         </div>
       </div>
     );

@@ -19,4 +19,17 @@ export function getDocumentProvider(id: string): DocumentGenerationProvider | un
   return providers.find((p) => p.id === id);
 }
 
+/** Registers or replaces a provider (used for the Phase 4 AI provider). */
+export function registerDocumentProvider(provider: DocumentGenerationProvider): void {
+  const index = providers.findIndex((p) => p.id === provider.id);
+  if (index >= 0) providers[index] = provider;
+  else providers.push(provider);
+}
+
+export function unregisterDocumentProvider(id: string): void {
+  if (id === templateProvider.id) return; // the deterministic provider always exists
+  const index = providers.findIndex((p) => p.id === id);
+  if (index >= 0) providers.splice(index, 1);
+}
+
 export const DEFAULT_DOCUMENT_PROVIDER_ID = templateProvider.id;

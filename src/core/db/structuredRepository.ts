@@ -406,20 +406,46 @@ export class StructuredRepository {
     return this.store.get<ClinicalHypothesis>(C.hypotheses, id);
   }
 
-  async createHypothesis(draft: HypothesisDraft, author: string): Promise<ClinicalHypothesis> {
+  async createHypothesis(
+    draft: HypothesisDraft,
+    author: string,
+    opts: { reviewStatus?: 'pending' | 'approved' } = {},
+  ): Promise<ClinicalHypothesis> {
     const now = nowIso();
     const hypothesis: ClinicalHypothesis = {
       ...draft,
       id: newId(),
-      reviewStatus: 'approved', // clinician-authored; AI drafts in Phase 4 arrive as pending
+      // Clinician-authored hypotheses are approved; AI-drafted hypotheses
+      // arrive as pending and go through the review queue.
+      reviewStatus: opts.reviewStatus ?? 'approved',
       lifecycleStatus: 'active',
       createdAt: now,
       updatedAt: now,
       version: 1,
     };
     await this.store.put(C.hypotheses, hypothesis.id, hypothesis);
-    await this.host.audit('data', 'hypothesis.create', `by ${author}`);
+    await this.host.audit('data', 'hypothesis.create', `by ${author}${opts.reviewStatus === 'pending' ? ' (pending review)' : ''}`);
     return hypothesis;
+  }
+
+  async decideHypothesis(
+    id: string,
+    decision: 'approve' | 'reject',
+    author: string,
+  ): Promise<ClinicalHypothesis> {
+    const existing = await this.getHypothesis(id);
+    if (!existing) throw new Error('Hypothesis not found');
+    await this.snapshot('hypothesis', existing, `Review decision: ${decision}`, author, decision);
+    const updated: ClinicalHypothesis = {
+      ...existing,
+      reviewStatus: decision === 'approve' ? 'approved' : 'rejected',
+      lifecycleStatus: decision === 'approve' ? 'active' : 'rejected',
+      updatedAt: nowIso(),
+      version: existing.version + 1,
+    };
+    await this.store.put(C.hypotheses, id, updated);
+    await this.host.audit('data', `hypothesis.${decision}`, `by ${author}`);
+    return updated;
   }
 
   async updateHypothesis(

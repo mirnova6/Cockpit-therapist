@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { AuthError, authService, type AuthStatus } from '../core/auth/authService';
+import { useAiStore } from './aiStore';
 import { useDataStore } from './dataStore';
 import { useDocumentsStore } from './documentsStore';
+import { useIntelligenceStore } from './intelligenceStore';
 import { useStructuredStore } from './structuredStore';
 
 interface AuthState {
@@ -54,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       error: undefined,
     });
     await useDataStore.getState().loadAll();
+    await useAiStore.getState().load();
   },
 
   unlock: async (secret, method) => {
@@ -62,6 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       else await authService.unlockWithPassphrase(secret);
       set({ status: 'unlocked', error: undefined, lockoutUntil: undefined });
       await useDataStore.getState().loadAll();
+      await useAiStore.getState().load();
       return true;
     } catch (err) {
       if (err instanceof AuthError) {
@@ -74,10 +78,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   lock: async () => {
+    // Cancel in-flight AI operations BEFORE the key is discarded (§26),
+    // then clear every store so no client context survives the lock.
+    useAiStore.getState().reset();
     await authService.lock();
     useDataStore.getState().reset();
     useStructuredStore.getState().reset();
     useDocumentsStore.getState().reset();
+    useIntelligenceStore.getState().reset();
     set({ status: 'locked', error: undefined });
   },
 

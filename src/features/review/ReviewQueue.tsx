@@ -35,7 +35,7 @@ export function ReviewQueueList({
 }) {
   const navigate = useNavigate();
   const clients = useDataStore((s) => s.clients);
-  const { decideFact, decideAssessment, editFact, bulkApproveFacts } = useStructuredStore();
+  const { decideFact, decideAssessment, decideHypothesis, editFact, bulkApproveFacts } = useStructuredStore();
   const structuredByClient = useStructuredStore((s) => s.byClient);
 
   const [kindFilter, setKindFilter] = useState<QueueItem['kind'] | 'all'>('all');
@@ -113,6 +113,10 @@ export function ReviewQueueList({
       });
     } else if (item.kind === 'assessment' && decision !== 'needs-clarification') {
       await decideAssessment(item.id, item.clientId, decision, riskNotes[item.id]?.trim() || undefined);
+    } else if (item.kind === 'hypothesis' && decision !== 'needs-clarification') {
+      // AI-drafted hypotheses land here as pending; approval keeps them
+      // hypotheses — there is no path from a hypothesis to a fact.
+      await decideHypothesis(item.id, item.clientId, decision);
     }
     onChanged();
   };
@@ -227,7 +231,7 @@ export function ReviewQueueList({
 
       {visible.map((item) => {
         const key = `${item.kind}:${item.id}`;
-        const canDecideHere = item.kind === 'fact' || item.kind === 'assessment';
+        const canDecideHere = item.kind === 'fact' || item.kind === 'assessment' || item.kind === 'hypothesis';
         const needsRiskNote = item.riskRelated && riskNotes[item.id] !== undefined;
         return (
           <Card key={key}>

@@ -15,10 +15,10 @@ import { ASSESSMENT_DEFINITIONS } from '../assessments/definitions';
 import type { ClinicalInput } from '../db/schema';
 import type { SourceClassification } from '../db/structuredSchema';
 import type {
-  ExtractionProvider,
   ExtractionResult,
   ProposedFact,
   ProposedItem,
+  SyncExtractionProvider,
 } from './types';
 
 const CAPABILITY_NOTE =
@@ -230,6 +230,15 @@ function extractRiskStatements(text: string, classification: SourceClassificatio
   return facts;
 }
 
+/**
+ * Independent risk-language check shared with the Phase 4 AI extraction
+ * provider: AI risk labeling is only ever ADDED to, never substituted for,
+ * this deterministic scan.
+ */
+export function matchesRiskLanguage(text: string): boolean {
+  return RISK_PATTERNS.some(({ pattern }) => new RegExp(pattern.source, 'i').test(text));
+}
+
 /** Quoted client statements: “…” or "..." of reasonable length. */
 function extractQuotes(text: string): ProposedFact[] {
   const facts: ProposedFact[] = [];
@@ -368,7 +377,7 @@ function extractSymptoms(text: string, classification: SourceClassification): Pr
 
 // ------------------------------------------------------------ provider
 
-export const ruleBasedProvider: ExtractionProvider = {
+export const ruleBasedProvider: SyncExtractionProvider = {
   id: 'rule-based',
   label: 'Rule-Based Extraction (deterministic)',
   capabilityNote: CAPABILITY_NOTE,
@@ -394,7 +403,9 @@ export const ruleBasedProvider: ExtractionProvider = {
       const key =
         item.kind === 'fact'
           ? `f:${item.category}:${item.statement}`
-          : `a:${item.definitionKey}:${item.totalScore}`;
+          : item.kind === 'assessment-score'
+            ? `a:${item.definitionKey}:${item.totalScore}`
+            : `h:${item.category}:${item.statement}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

@@ -2,9 +2,12 @@
  * ClinicalDatabase — repository facade over the encrypted store.
  * One instance exists per unlocked session; locking discards it.
  */
+import { AiRepository } from '../ai/aiRepository';
+import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
 import { DocumentsRepository } from './documentsRepository';
+import { IntelligenceRepository } from './intelligenceRepository';
 import { StructuredRepository } from './structuredRepository';
 import {
   DEFAULT_PREFS,
@@ -46,6 +49,12 @@ export class ClinicalDatabase {
   readonly structured: StructuredRepository;
   /** Phase 3 clinical documents (DAP notes, treatment plans, goals). */
   readonly documents: DocumentsRepository;
+  /** Phase 4 AI settings, operations log, and clinician feedback. */
+  readonly ai: AiRepository;
+  /** Phase 4 clinician-managed clinical knowledge base (workspace-level). */
+  readonly knowledge: KnowledgeRepository;
+  /** Phase 4 formulations, strategies, update summaries, assistant threads. */
+  readonly intelligence: IntelligenceRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
@@ -53,6 +62,18 @@ export class ClinicalDatabase {
   ) {
     this.store = new EncryptedStore(adapter, dek);
     this.documents = new DocumentsRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.ai = new AiRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.knowledge = new KnowledgeRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.intelligence = new IntelligenceRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
@@ -149,6 +170,8 @@ export class ClinicalDatabase {
 
   /** Permanently removes the client and every associated record and blob. */
   async deleteClient(id: string, author: string): Promise<void> {
+    await this.intelligence.deleteAllForClient(id);
+    await this.ai.deleteAllForClient(id);
     await this.documents.deleteAllForClient(id);
     await this.structured.deleteAllForClient(id);
     const inputs = await this.listInputsForClient(id, { includeArchived: true });

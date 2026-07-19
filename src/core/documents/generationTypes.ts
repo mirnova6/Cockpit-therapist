@@ -8,7 +8,10 @@
  * segment/evidence structure.
  *
  * Providers are pure functions over their context: client text can never
- * trigger actions, and no provider may perform network calls in Phase 3.
+ * trigger actions. The deterministic template provider is synchronous and
+ * fully offline; Phase 4 AI providers are async and run through the
+ * aiGateway (consent, isolation, logging, cancellation) before any model
+ * call happens.
  */
 import type { Client, ClinicalInput } from '../db/schema';
 import type {
@@ -70,6 +73,12 @@ export interface DocumentGenerationProvider {
   readonly label: string;
   /** Honest disclosure shown with every draft this provider produces. */
   readonly disclosure: string;
+  generateDapNote(context: GenerationContext): DapGenerationResult | Promise<DapGenerationResult>;
+  generateTreatmentPlan(context: GenerationContext): PlanGenerationResult | Promise<PlanGenerationResult>;
+}
+
+/** Deterministic providers stay synchronous; callers may rely on it. */
+export interface SyncDocumentGenerationProvider extends DocumentGenerationProvider {
   generateDapNote(context: GenerationContext): DapGenerationResult;
   generateTreatmentPlan(context: GenerationContext): PlanGenerationResult;
 }

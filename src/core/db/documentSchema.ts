@@ -56,6 +56,12 @@ export interface SegmentSource {
 
 export type SegmentKind = 'factual' | 'interpretive' | 'template' | 'therapist-authored';
 
+/** Result of the separate unsupported-claim verification pass (Phase 4). */
+export interface SegmentVerification {
+  status: import('../ai/aiSchema').ClaimStatus;
+  note: string;
+}
+
 export interface DocSegment {
   id: string;
   /** e.g. 'data' | 'assessment' | 'plan' | 'evidenced-by' | 'formulation:strengths' */
@@ -69,6 +75,8 @@ export interface DocSegment {
   /** Clinician confirmation for risk segments; approval is blocked without it. */
   riskAcknowledged?: boolean;
   riskNote?: string;
+  /** Verification verdict from the separate claim-verification pass. */
+  verification?: SegmentVerification;
 }
 
 /** "Unsupported draft content": claims with no source that aren't the clinician's own words or a structural heading. */

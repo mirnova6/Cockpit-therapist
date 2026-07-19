@@ -209,4 +209,77 @@ describe('backupService', () => {
     expect(isValidBackup({})).toBe(false);
     expect(isValidBackup({ format: 'something-else', version: 1 })).toBe(false);
   });
+
+  it('round-trips Phase 4 records (AI settings, knowledge, formulations) in the same format', async () => {
+    const sourceName = `test-backup-p4-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p4-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-4' });
+    const client = await sourceDb.createClient(
+      {
+        displayName: 'R.S.',
+        contactEnabled: false,
+        levelOfCare: 'outpatient',
+        status: 'active',
+        diagnoses: [],
+        medications: [],
+        risk: { level: 'low' },
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.ai.saveSettings({ onlineApiKey: 'sk-ant-backup-secret', onlineEnabled: false });
+    const knowledge = await sourceDb.knowledge.createSource(
+      {
+        title: 'MI Manual',
+        topic: 'motivational interviewing',
+        sourceType: 'treatment-manual',
+        citationDetails: 'Miller & Rollnick (2013).',
+        allowedUses: [],
+        excludedUses: [],
+      },
+      'Ambivalence is the central working material of motivational interviewing.',
+      'Dr. Osei',
+    );
+    await sourceDb.knowledge.setStatus(knowledge.id, 'approved', 'Dr. Osei');
+    await sourceDb.intelligence.proposeFormulation(
+      {
+        clientId: client.id,
+        framework: 'biopsychosocial',
+        sections: [],
+        areasNeedingAssessment: [],
+        updateReason: 'test',
+        generation: {
+          providerType: 'deterministic',
+          providerId: 'deterministic',
+          generatedAt: '2026-07-10T00:00:00Z',
+          disclosure: 'test',
+        },
+      },
+      'Dr. Osei',
+    );
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    const dump = JSON.stringify(backup.records);
+    // Never plaintext: not the API key, not knowledge text, not PHI.
+    expect(dump).not.toContain('sk-ant-backup-secret');
+    expect(dump).not.toContain('Ambivalence');
+
+    const targetAuth = makeService(targetName);
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-4');
+    const settings = await restored.ai.getSettings();
+    expect(settings.onlineApiKey).toBe('sk-ant-backup-secret');
+    expect(settings.onlineEnabled).toBe(false);
+    const sources = await restored.knowledge.listSources();
+    expect(sources).toHaveLength(1);
+    expect(sources[0].status).toBe('approved');
+    expect((await restored.knowledge.listChunks(sources[0].id)).length).toBeGreaterThan(0);
+    const restoredClient = (await restored.listClients())[0];
+    expect(await restored.intelligence.listFormulations(restoredClient.id)).toHaveLength(1);
+  });
 });

@@ -17,8 +17,8 @@ infrastructure, agreements, and legal review.
 | **1 — Foundation** | Authentication, encrypted client database, Choose Client screen, client dashboard, clinical input storage, risk-flag review, change history, backup/restore, auto-lock | ✅ **Complete & tested** |
 | **2 — Structured clinical data** | Extracted facts with rule-based extraction preview, assessment tracking with official scoring rules, hypotheses, evidence links, contradictions & missing-information tracking, review queue, version history, structured profile | ✅ **Complete & tested** |
 | **3 — Documentation** | DAP note generator, Master Treatment Plan generator, goals & objectives editor, per-segment evidence linking, document review/approval with risk gating, version comparison, approved-only export | ✅ **Complete & tested** |
-| 4 — Clinical intelligence | Client-record + knowledge retrieval (RAG), reasoning pipeline, formulation updates, intervention recommendations | Not started |
-| 5 — Quality & security | Clinical AI evaluation, hallucination checks, prompt-injection protection, expanded audit, online mode | Not started |
+| **4 — Clinical intelligence** | ClinicalAIProvider architecture (deterministic / local / secure-online), client-record RAG with debug panel, clinician-managed knowledge base, 20-step Analyze-and-Update pipeline, living case formulations, intervention recommendations, safety & trust strategy, client-specific assistant, unsupported-claim verification, clinician feedback | ✅ **Complete & tested** |
+| 5 — Quality & security | Clinical AI evaluation harness, hallucination metrics, expanded audit, online-mode controls | Not started |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -132,6 +132,91 @@ metadata and labeled honestly in the UI.
   APPROVED"; identifier format and content options; every export audited; no internal
   instructions or encryption material ever exported.
 
+## What works in Phase 4
+
+- **AI provider architecture** — a vendor-neutral `ClinicalAIProvider` seam with three
+  provider types: *Deterministic* (always available, never simulates model output),
+  *Local AI* (any OpenAI-compatible endpoint — Ollama, LM Studio, llama.cpp — with a
+  genuine connectivity check that verifies the configured model is actually served),
+  and *Secure Online AI* (Anthropic Messages API over HTTPS). Every AI operation is
+  logged (provider, model, mode, sources, consent status, whether PHI left the device)
+  with identifiers only — never prompt text. Providers never touch the database.
+- **Online mode is disabled by default** and layered: enabling it is not enough — the
+  clinician must also attest the provider relationship is approved for PHI (the gateway
+  otherwise refuses to send protected information), every source input must carry
+  AI-analysis consent and not be local-only, and each send shows exactly the outbound
+  text (with optional best-effort redaction, previewed and never claimed perfect) behind
+  an explicit confirmation. The app never claims configuration equals HIPAA compliance.
+- **Client-record RAG** — deterministic lexical retrieval (BM25-style + documented
+  boosts for approval status, source type, recency, longitudinal repetition, and risk
+  intent) over one client's authorized record only. Longitudinal questions pull from
+  multiple time periods, contradictions are always surfaced, rejected material is never
+  retrieved, pending facts only by explicit opt-in — and a retrieval-debug panel shows
+  every source, score, reason, and exclusion. A final namespace check aborts retrieval
+  if a foreign record ever appears.
+- **Clinician-managed knowledge base** — encrypted library of manuals, protocols,
+  scoring guides, articles, and clinician-authored frameworks with full metadata,
+  six statuses, allowed/excluded uses, and re-review dates. Text is chunked with
+  section/page markers; ONLY clinician-approved, non-expired sources are retrievable;
+  every cited passage keeps its source, section/page, version, and citation. No
+  invented references; no proprietary frameworks unless the clinician supplies and
+  approves the material.
+- **Analyze and Update** — the 20-step reasoning pipeline (validation, consent,
+  classification, explicit extraction, separated inferences, longitudinal + contradictory
+  retrieval, knowledge lookup, change-over-time, drafting, verification, isolation
+  check) produces a Clinical Update Summary where every item is a proposal with exact
+  evidence: approve / edit-and-approve / reject / save-as-hypothesis / needs-further-
+  assessment / do-not-save, per item, no bulk path. Risk mentions always require
+  individual review. Cancellable mid-run; deterministic mode runs the whole pipeline
+  honestly with rule-based extraction.
+- **AI extraction** — registers through the Phase 2 `ExtractionProvider` seam with the
+  six §4 labels (Explicitly Stated → Needs Further Assessment). Hallucination guards:
+  excerpts must exist verbatim in the source or the item is downgraded; assessment
+  scores must appear in the text; the deterministic risk scan can only ADD risk
+  sensitivity; interpretations arrive as hypothesis proposals that can only ever be
+  saved as pending hypotheses — never as facts.
+- **AI document generation** — registers through the Phase 3
+  `DocumentGenerationProvider` seam. Model prose returns with per-sentence citations
+  mapped back to real evidence, then a SEPARATE deterministic verifier labels every
+  sentence (seven statuses); unsupported/contradicted content is flagged, hypothesis
+  citations force labeled interpretive kind, risk language forces the existing risk
+  gating, and undocumented objective numbers become explicit "Clinician input
+  required" gaps. One click copies proposed objectives into the Goals editor without
+  approving the plan.
+- **Living case formulation** — ten frameworks (BPS, Five Ps, developmental,
+  trauma-informed, attachment, CBT, psychodynamic, substance-use, family systems,
+  cultural), clinician-toggleable. Sections carry supporting evidence, contradicting
+  evidence, alternative explanations, and qualitative confidence; empty sections say
+  so instead of fabricating. Updates are PROPOSALS with a Previous → Proposed diff
+  (what changed, evidence added, confidence shifts); approving supersedes with full
+  version history — never a silent overwrite.
+- **Best interventions** — rule-based matching of 20 modalities against approved
+  client evidence, tiered *established / tentative / exploratory* (established requires
+  BOTH client evidence and approved knowledge support with real citations). Every
+  option carries readiness indicators, cautions, pacing, signs of benefit/overwhelm,
+  measurement, and alternatives — presented as options, never directives. Trauma
+  processing surfaces a stabilization concern when stabilization evidence is missing
+  or risk is elevated.
+- **Safety & trust strategy** — alliance guidance (communication style, pacing,
+  validation, directness, challenge, rupture triggers, repair, autonomy, questions to
+  ask the client) built from approved evidence, with hypothesis-based items labeled;
+  approved via clinician review with history.
+- **Clinical assistant** — per-client Q&A that uses only that client's authorized
+  record plus approved knowledge, with citations, contradictions, qualitative
+  confidence, follow-up questions, and navigation-only suggested actions. In
+  deterministic mode answers are retrieval-based and say so; with a model, answers are
+  verified sentence-by-sentence by the separate deterministic verifier. The assistant
+  has no write authority — nothing in any answer can approve, modify, delete, or
+  export records.
+- **Clinician feedback** — 13 rating labels on any AI output, stored separately from
+  the clinical record, never crossing clients, never auto-training anything; a Phase 5
+  evaluation export bundles feedback + operation metadata on demand.
+- **Navigation** — client sections are grouped (Overview / Documentation / Clinical
+  Understanding / Assessments and Risk / More); mobile shows exactly five bottom-nav
+  groups with a destination sheet, never 14 items. Local vs online processing is
+  always visibly labeled, and locking the workspace cancels in-flight AI operations
+  and clears all AI state.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -144,6 +229,12 @@ metadata and labeled honestly in the UI.
 - Backups export the encrypted envelopes verbatim — unreadable without the passphrase.
 - Verified in tests: the IndexedDB stores contain no plaintext PHI, tampered ciphertext is
   rejected, and client text such as “ignore your previous instructions” is inert data (§26).
+- Phase 4: model API keys are stored inside the same encrypted records store (never
+  plaintext), the AI operations log stores identifiers and metadata only, online
+  processing is impossible without explicit layered consent, prompts fence all client
+  text as untrusted data, AI providers have no database write authority, cross-client
+  evidence is rejected before every retrieval/generation/save, and locking cancels
+  in-flight AI operations and clears all AI state.
 
 ## Architecture
 
@@ -156,17 +247,30 @@ src/
   core/                    platform-agnostic domain layer (no React imports)
     crypto/                WebCrypto AES-GCM + PBKDF2 key wrapping
     storage/               StorageAdapter interface + IndexedDB impl + EncryptedStore
-    db/                    Phase 1 schema + ClinicalDatabase repositories
-                           structuredSchema + StructuredRepository (Phase 2 entities)
+    db/                    schemas + ClinicalDatabase repositories (Phases 1–4:
+                           structured, documents, intelligence, AI, knowledge)
     assessments/           assessment definitions with cited official scoring rules
-    extraction/            ExtractionProvider interface + deterministic rule-based provider
+    extraction/            ExtractionProvider seam: rule-based + AI providers
+    documents/             DocumentGenerationProvider seam: template + AI providers
+    ai/                    ClinicalAIProvider seam, gateway (consent/isolation/logging/
+                           cancellation), Anthropic + local transports, redaction,
+                           prompt assembly, claim verification
+    rag/                   deterministic lexical client-record retrieval + debug
+    knowledge/             clinician-managed knowledge base (chunking, approval,
+                           retrieval with citation preservation)
+    pipeline/              20-step Analyze-and-Update reasoning pipeline
+    formulation/           10-framework living case-formulation engine + diffing
+    interventions/         rule-based intervention recommendation engine
+    strategy/              safety & trust strategy engine
+    assistant/             client-specific assistant (retrieval-only + AI modes)
     auth/                  AuthService: setup/unlock/lock/lockout/credential changes
     backup/                encrypted workspace snapshot + restore
   state/                   zustand stores bridging core ←→ UI
   features/                auth, clients, dashboard, inputs, profile, assessments,
-                           hypotheses, evidence, extraction, review, settings
+                           hypotheses, evidence, extraction, review, documents, goals,
+                           intelligence, knowledge, settings
   app/                     design system (theme.css), shared components, router
-e2e/smoke.mjs              browser-level end-to-end verification (33 checks)
+e2e/smoke.mjs              browser-level end-to-end verification (75 checks)
 ```
 
 Replaceability seams for later phases: the storage engine sits behind `StorageAdapter`
@@ -179,10 +283,14 @@ same repositories without touching the UI layer.
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 64 unit tests: crypto, auth, repositories, structured data,
-                     # extraction rules, assessment scoring, backup, filters
+npm test             # 181 unit tests: crypto, auth, repositories, structured data,
+                     # extraction rules, assessment scoring, documents, backup,
+                     # AI gateway/consent/isolation, RAG, knowledge base,
+                     # verification, pipeline, formulation, interventions, assistant
 npm run typecheck    # strict TS
 npm run build        # production build
-node e2e/smoke.mjs   # 33-check browser E2E: setup → clients → risk review →
-                     # extraction → profile → assessments → queue → relaunch
+node e2e/smoke.mjs   # 75-check browser E2E: setup → clients → risk review →
+                     # extraction → profile → assessments → documents → AI settings →
+                     # knowledge → formulation → interventions → assistant →
+                     # Analyze-and-Update → relaunch → encrypted-at-rest check
 ```

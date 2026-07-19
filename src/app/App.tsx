@@ -20,6 +20,12 @@ import { EvidenceTab } from '../features/evidence/EvidenceTab';
 import { ExtractionPreviewScreen } from '../features/extraction/ExtractionPreviewScreen';
 import { HypothesesTab } from '../features/hypotheses/HypothesesTab';
 import { StructuredProfileTab } from '../features/profile/StructuredProfileTab';
+import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
+import { AssistantTab } from '../features/intelligence/AssistantTab';
+import { FormulationTab } from '../features/intelligence/FormulationTab';
+import { InterventionsTab } from '../features/intelligence/InterventionsTab';
+import { SafetyTrustTab } from '../features/intelligence/SafetyTrustTab';
+import { KnowledgeScreen } from '../features/knowledge/KnowledgeScreen';
 import { GlobalReviewScreen } from '../features/review/GlobalReviewScreen';
 import { ReviewQueueTab } from '../features/review/ReviewQueueTab';
 import { AppSettingsScreen } from '../features/settings/AppSettingsScreen';
@@ -53,6 +59,7 @@ export function App() {
       <Route path="/" element={<ChooseClientScreen />} />
       <Route path="/settings" element={<AppSettingsScreen />} />
       <Route path="/review" element={<GlobalReviewScreen />} />
+      <Route path="/knowledge" element={<KnowledgeScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />
         <Route path="add" element={<AddClinicalInputScreen />} />
@@ -69,6 +76,12 @@ export function App() {
         <Route path="plan/:planId" element={<PlanScreen />} />
         <Route path="goals" element={<GoalsTab />} />
         <Route path="documents" element={<DocumentsTab />} />
+        <Route path="formulation" element={<FormulationTab />} />
+        <Route path="interventions" element={<InterventionsTab />} />
+        <Route path="safety-trust" element={<SafetyTrustTab />} />
+        <Route path="assistant" element={<AssistantTab />} />
+        <Route path="analyze" element={<AnalyzeTab />} />
+        <Route path="analyze/:summaryId" element={<UpdateSummaryScreen />} />
         <Route path="review" element={<ReviewQueueTab />} />
         <Route path="timeline" element={<TimelineTab />} />
         <Route path="settings" element={<ClientSettingsTab />} />

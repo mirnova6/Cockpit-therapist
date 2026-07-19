@@ -32,14 +32,19 @@ interface DocumentsState {
   generateDapNote: (
     clientId: string,
     selection: SourceSelection,
-    meta: { sessionDate: string; sessionNumber?: number; levelOfCare: string; style: DapStyle },
+    meta: { sessionDate: string; sessionNumber?: number; levelOfCare: string; style: DapStyle; providerId?: string },
   ) => Promise<DapNote>;
   updateDapNote: (id: string, clientId: string, patch: Partial<DapNote>, reason: string) => Promise<void>;
   decideDapNote: (id: string, clientId: string, decision: DocDecision, comment?: string) => Promise<void>;
   acknowledgeDapRisk: (id: string, clientId: string, segmentId: string, note?: string) => Promise<void>;
   deleteDapNote: (id: string, clientId: string) => Promise<void>;
 
-  generatePlan: (clientId: string, selection: SourceSelection, planDate: string) => Promise<TreatmentPlanDoc>;
+  generatePlan: (
+    clientId: string,
+    selection: SourceSelection,
+    planDate: string,
+    providerId?: string,
+  ) => Promise<TreatmentPlanDoc>;
   updatePlan: (id: string, clientId: string, patch: Partial<TreatmentPlanDoc>, reason: string) => Promise<void>;
   decidePlan: (id: string, clientId: string, decision: DocDecision, comment?: string) => Promise<void>;
   acknowledgePlanRisk: (id: string, clientId: string, itemId: string, note?: string) => Promise<void>;
@@ -75,12 +80,14 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => {
 
     generateDapNote: async (clientId, selection, meta) => {
       const db = authService.require();
-      const provider = getDocumentProvider(DEFAULT_DOCUMENT_PROVIDER_ID)!;
+      const provider =
+        getDocumentProvider(meta.providerId ?? DEFAULT_DOCUMENT_PROVIDER_ID) ??
+        getDocumentProvider(DEFAULT_DOCUMENT_PROVIDER_ID)!;
       const context = await assembleGenerationContext(db, clientId, 'dap-note', selection, {
         sessionDate: meta.sessionDate,
         sessionNumber: meta.sessionNumber,
       });
-      const result = provider.generateDapNote(context);
+      const result = await provider.generateDapNote(context);
       const note = await db.documents.createDapNote(
         {
           clientId,
@@ -122,14 +129,16 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => {
       await reload(clientId);
     },
 
-    generatePlan: async (clientId, selection, planDate) => {
+    generatePlan: async (clientId, selection, planDate, providerId) => {
       const db = authService.require();
-      const provider = getDocumentProvider(DEFAULT_DOCUMENT_PROVIDER_ID)!;
+      const provider =
+        getDocumentProvider(providerId ?? DEFAULT_DOCUMENT_PROVIDER_ID) ??
+        getDocumentProvider(DEFAULT_DOCUMENT_PROVIDER_ID)!;
       const context = await assembleGenerationContext(db, clientId, 'treatment-plan', selection, {
         sessionDate: planDate,
       });
       const client = context.client;
-      const result = provider.generateTreatmentPlan(context);
+      const result = await provider.generateTreatmentPlan(context);
       const plan = await db.documents.createPlan(
         {
           clientId,

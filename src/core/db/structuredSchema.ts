@@ -488,7 +488,10 @@ export type VersionedEntityType =
   | 'gap'
   | 'dap-note'
   | 'treatment-plan'
-  | 'goal';
+  | 'goal'
+  | 'formulation'
+  | 'strategy'
+  | 'intervention-set';
 
 export interface VersionRecord {
   id: string;

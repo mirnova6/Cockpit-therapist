@@ -9,6 +9,7 @@ import { downloadJson } from '../../lib/download';
 import { fmtDateTime } from '../../lib/format';
 import { useAuthStore } from '../../state/authStore';
 import { useDataStore } from '../../state/dataStore';
+import { AiSettingsCard } from './AiSettingsCard';
 
 export function AppSettingsScreen() {
   const navigate = useNavigate();
@@ -198,6 +199,8 @@ export function AppSettingsScreen() {
             )}
           </div>
         </Card>
+
+        <AiSettingsCard />
 
         <Card title="Backup & restore" icon="download">
           <div className="stack">

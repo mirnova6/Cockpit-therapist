@@ -62,7 +62,7 @@ export function PlanScreen() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
   const docs = useDocumentsStore((s) => s.byClient[client.id]);
-  const { loadClient, updatePlan, decidePlan, acknowledgePlanRisk, deletePlan } = useDocumentsStore();
+  const { loadClient, updatePlan, decidePlan, acknowledgePlanRisk, deletePlan, createGoal } = useDocumentsStore();
 
   const plan = docs?.plans.find((p) => p.id === planId);
   const goals = docs?.goals ?? [];
@@ -77,6 +77,29 @@ export function PlanScreen() {
   const [problemText, setProblemText] = useState('');
   const [rationaleDraft, setRationaleDraft] = useState<string | null>(null);
   const [improvementDraft, setImprovementDraft] = useState<string | null>(null);
+  const [objectivesAdded, setObjectivesAdded] = useState(false);
+
+  const addProposedObjectivesToGoals = async () => {
+    if (!plan || objectivesAdded) return;
+    // Creates EDITABLE goal records only — the plan itself stays unapproved.
+    await createGoal({
+      clientId: client.id,
+      kind: 'short-term',
+      title: `Proposed objectives from treatment plan ${fmtDate(plan.planDate)}`,
+      rationale: 'Copied from generator-proposed objective skeletons; complete the flagged fields.',
+      status: 'active',
+      objectives: plan.proposedObjectives.map((proposed) => ({
+        id: crypto.randomUUID(),
+        description: proposed.description,
+        targetProblem: proposed.targetProblem,
+        measurementMethod: proposed.measurementMethod,
+        progress: 'not-started' as const,
+        progressNotes: [],
+        therapistPlan: {},
+      })),
+    });
+    setObjectivesAdded(true);
+  };
 
   useEffect(() => {
     void loadClient(client.id);
@@ -327,6 +350,20 @@ export function PlanScreen() {
             dates — add a skeleton to the Goals editor and complete the flagged fields there.
           </p>
           <div className="stack">
+            <div className="cluster">
+              <button
+                className="btn btn--secondary btn--sm"
+                disabled={objectivesAdded}
+                onClick={() => void addProposedObjectivesToGoals()}
+              >
+                <Icon name="plus" size={13} /> {objectivesAdded ? 'Added to Goals editor' : 'Add proposed objectives to Goals Editor'}
+              </button>
+              {objectivesAdded && (
+                <span className="muted small">
+                  Editable goal records created — the treatment plan itself was NOT approved by this action.
+                </span>
+              )}
+            </div>
             {plan.proposedObjectives.map((objective) => (
               <div key={objective.id} className="stack-sm" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
                 <p className="soft small" style={{ margin: 0 }}>{objective.description}</p>

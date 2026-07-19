@@ -29,6 +29,7 @@ interface DataState {
   setClientArchived: (id: string, archived: boolean) => Promise<void>;
   deleteClient: (id: string) => Promise<void>;
   noteClientViewed: (id: string) => Promise<void>;
+  setPrefs: (patch: Partial<UserPrefs>) => Promise<void>;
 
   addInput: (draft: ClinicalInputDraft, files: NewAttachment[]) => Promise<ClinicalInput>;
   updateInput: (id: string, patch: Partial<ClinicalInput>, summary: string) => Promise<void>;
@@ -176,6 +177,13 @@ export const useDataStore = create<DataState>((set, get) => ({
   noteClientViewed: async (id) => {
     const db = authService.require();
     const prefs = await db.noteClientViewed(id);
+    set({ prefs });
+  },
+
+  setPrefs: async (patch) => {
+    const db = authService.require();
+    const prefs = { ...get().prefs, ...patch };
+    await db.setPrefs(prefs);
     set({ prefs });
   },
 
