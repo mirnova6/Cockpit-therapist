@@ -90,6 +90,20 @@ export class AiRepository {
   }
 
   /**
+   * Workspace-wide feedback for the Phase 5 dashboard. Aggregation is
+   * read-only: feedback never changes official records and never becomes
+   * clinical data for any client.
+   */
+  async listAllFeedback(): Promise<AiFeedbackRecord[]> {
+    const all = await this.store.getAll<AiFeedbackRecord>(C.feedback);
+    return all.sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  async getOperation(id: string): Promise<AiOperationRecord | undefined> {
+    return this.store.get<AiOperationRecord>(C.operations, id);
+  }
+
+  /**
    * Phase 5 evaluation export hook: feedback plus operation metadata for a
    * single client (or all), with NO clinical plaintext beyond the
    * clinician's own feedback comments. Not wired to any automatic

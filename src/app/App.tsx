@@ -20,6 +20,13 @@ import { EvidenceTab } from '../features/evidence/EvidenceTab';
 import { ExtractionPreviewScreen } from '../features/extraction/ExtractionPreviewScreen';
 import { HypothesesTab } from '../features/hypotheses/HypothesesTab';
 import { StructuredProfileTab } from '../features/profile/StructuredProfileTab';
+import { CompareScreen } from '../features/evaluation/CompareScreen';
+import { EvalRunScreen } from '../features/evaluation/EvalRunScreen';
+import { EvaluationScreen } from '../features/evaluation/EvaluationScreen';
+import { AuditScreen } from '../features/governance/AuditScreen';
+import { FeedbackDashboard } from '../features/governance/FeedbackDashboard';
+import { ProviderRegistryScreen } from '../features/governance/ProviderRegistryScreen';
+import { ReadinessScreen } from '../features/governance/ReadinessScreen';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
 import { AssistantTab } from '../features/intelligence/AssistantTab';
 import { FormulationTab } from '../features/intelligence/FormulationTab';
@@ -60,6 +67,13 @@ export function App() {
       <Route path="/settings" element={<AppSettingsScreen />} />
       <Route path="/review" element={<GlobalReviewScreen />} />
       <Route path="/knowledge" element={<KnowledgeScreen />} />
+      <Route path="/evaluation" element={<EvaluationScreen />} />
+      <Route path="/evaluation/runs/:runId" element={<EvalRunScreen />} />
+      <Route path="/evaluation/compare" element={<CompareScreen />} />
+      <Route path="/audit" element={<AuditScreen />} />
+      <Route path="/feedback" element={<FeedbackDashboard />} />
+      <Route path="/providers" element={<ProviderRegistryScreen />} />
+      <Route path="/readiness" element={<ReadinessScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />
         <Route path="add" element={<AddClinicalInputScreen />} />

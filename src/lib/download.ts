@@ -1,3 +1,7 @@
+export function downloadText(filename: string, text: string): void {
+  downloadBlob(filename, new Blob([text], { type: 'text/plain' }));
+}
+
 export function downloadJson(filename: string, value: unknown): void {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
   downloadBlob(filename, blob);

@@ -110,6 +110,12 @@ export interface Client {
   diagnoses: DiagnosisEntry[];
   medications: MedicationEntry[];
   risk: RiskStatus;
+  /**
+   * Per-client local-only override (§17): when true, NOTHING about this
+   * client may be sent to an online AI provider, regardless of per-input
+   * consent flags or workspace settings. Enforced in the aiGateway.
+   */
+  aiLocalOnly?: boolean;
   createdAt: string;
   updatedAt: string;
   archived: boolean;

@@ -193,6 +193,19 @@ export function AiSettingsCard() {
               Apply best-effort redaction before sending (transformed text is always shown first; redaction is
               never perfect)
             </label>
+            <div className={`notice ${settings.onlineKillSwitch ? 'notice--danger' : 'notice--info'}`} style={{ display: 'block' }}>
+              <label className="cluster small" style={{ gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.onlineKillSwitch}
+                  onChange={(e) => void saveSettings({ onlineKillSwitch: e.target.checked })}
+                />
+                <span>
+                  <strong>Emergency disable switch.</strong> While active, EVERY online send is refused
+                  immediately — regardless of attestations, approvals, or per-run confirmations.
+                </span>
+              </label>
+            </div>
             <p className="muted small" style={{ margin: 0 }}>
               These settings and attestations do not, by themselves, make your practice HIPAA-compliant —
               compliance also depends on your policies, agreements, and legal review. Clinical data is never used
@@ -201,9 +214,24 @@ export function AiSettingsCard() {
           </div>
         </details>
 
-        <div className="cluster">
+        <div className="cluster" style={{ flexWrap: 'wrap' }}>
           <Link className="btn btn--secondary btn--sm" to="/knowledge">
             <Icon name="file" size={13} /> Clinical knowledge library
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to="/evaluation">
+            <Icon name="activity" size={13} /> Clinical AI Evaluation
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to="/providers">
+            <Icon name="shield" size={13} /> Provider approvals
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to="/audit">
+            <Icon name="list" size={13} /> Audit & AI operations
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to="/feedback">
+            <Icon name="edit" size={13} /> Feedback dashboard
+          </Link>
+          <Link className="btn btn--secondary btn--sm" to="/readiness">
+            <Icon name="check" size={13} /> Readiness checklist & report
           </Link>
           <button
             className="btn btn--ghost btn--sm"

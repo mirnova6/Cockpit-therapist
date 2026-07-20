@@ -169,7 +169,7 @@ export async function runAnalyzePipeline(
   // Deterministic contradiction scan: same-category approved facts whose
   // polarity conflicts with a new proposal (negation mismatch), plus
   // provider-flagged conflicts, plus retrieved contradiction records.
-  const NEG = /\b(no|not|denies|denied|never|without|stopped|quit|abstinent|abstinence|clean|sober)\b/i;
+  const NEG = /\b(no|not|denies|denied|never|without|stopped|quit|abstinent|abstinence|clean|sober|barely|minimal|minimally)\b/i;
   const detectedContradictions: Array<{ proposal: ProposedFact; existing: (typeof approvedExisting)[number] }> = [];
   for (const proposal of factItems) {
     for (const existing of approvedExisting.filter((f) => f.category === proposal.category)) {

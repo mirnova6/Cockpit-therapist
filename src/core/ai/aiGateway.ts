@@ -92,6 +92,15 @@ export function evaluateConsent(
     return { status: 'not-required-local', ok: true, blockedInputIds: [] };
   }
   // Online provider
+  if (settings.onlineKillSwitch) {
+    return {
+      status: 'refused-kill-switch',
+      ok: false,
+      reason:
+        'The emergency disable switch for online AI is active. No content leaves this device until it is turned off in AI settings.',
+      blockedInputIds: [],
+    };
+  }
   if (!settings.onlineEnabled) {
     return {
       status: 'refused-online-disabled',
@@ -235,6 +244,59 @@ export interface GatewayRunArgs {
   operationToken?: string;
 }
 
+/**
+ * Registry + per-client checks for ONLINE runs (§17). When a provider
+ * approval entry exists for the active provider, it is enforced strictly:
+ * status must be 'approved', the approval must not be past its review
+ * date, and the capability must be allowed. A per-client local-only flag
+ * always wins over everything else.
+ */
+async function onlineGovernanceRefusal(
+  db: ClinicalDatabase,
+  clientId: string | undefined,
+  capability: AiCapability,
+  providerId: string,
+): Promise<{ status: AiConsentStatus; reason: string } | null> {
+  if (clientId) {
+    const client = await db.getClient(clientId);
+    if (client?.aiLocalOnly) {
+      return {
+        status: 'refused-client-local-only',
+        reason:
+          'This client is marked local-only. Nothing about this client may be sent to an online provider, regardless of other settings.',
+      };
+    }
+  }
+  const approval = await db.governance.approvalFor(providerId);
+  if (!approval) return null; // no registry entry — Phase 4 attestations still gate PHI
+  if (approval.approvalStatus !== 'approved') {
+    return {
+      status: 'refused-provider-not-approved',
+      reason: `Provider "${approval.providerName}" is ${approval.approvalStatus} in the approval registry. Protected information will not be sent.`,
+    };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (approval.reviewDueDate && approval.reviewDueDate < today) {
+    return {
+      status: 'refused-approval-expired',
+      reason: `The approval for "${approval.providerName}" expired on ${approval.reviewDueDate}. Re-review it in the provider registry before sending.`,
+    };
+  }
+  if (approval.disallowedPurposes.includes(capability)) {
+    return {
+      status: 'refused-purpose-not-approved',
+      reason: `"${capability}" is a disallowed use for provider "${approval.providerName}".`,
+    };
+  }
+  if (approval.approvedPurposes.length > 0 && !approval.approvedPurposes.includes(capability)) {
+    return {
+      status: 'refused-purpose-not-approved',
+      reason: `"${capability}" is not among the approved uses for provider "${approval.providerName}".`,
+    };
+  }
+  return null;
+}
+
 export class ConsentRefusedError extends Error {
   constructor(
     readonly consent: ConsentCheckResult,
@@ -276,7 +338,7 @@ export async function runAiTask(args: GatewayRunArgs): Promise<{
   // 1. Isolation before anything else.
   if (args.clientId) await assertClientScope(db, args.clientId, args.clientEvidence);
 
-  // 2. Consent.
+  // 2. Consent (kill switch, master switch, attestation, per-input flags).
   const consent = evaluateConsent(settings, provider, args.sourceInputs);
   if (!consent.ok) {
     await db.ai.logOperation({
@@ -289,7 +351,25 @@ export async function runAiTask(args: GatewayRunArgs): Promise<{
     throw new ConsentRefusedError(consent, consent.reason ?? 'AI processing was refused.');
   }
 
-  // 3. Online sends require an explicit clinician confirmation of the preview.
+  // 3. Online governance: per-client local-only override + approval registry.
+  if (provider.providerType === 'online') {
+    const refusal = await onlineGovernanceRefusal(db, args.clientId, args.capability, provider.id);
+    if (refusal) {
+      await db.ai.logOperation({
+        ...baseRecord,
+        consentStatus: refusal.status,
+        status: 'refused',
+        phiLeftDevice: false,
+        errorKind: refusal.status,
+      });
+      throw new ConsentRefusedError(
+        { status: refusal.status, ok: false, reason: refusal.reason, blockedInputIds: [] },
+        refusal.reason,
+      );
+    }
+  }
+
+  // 4. Online sends require an explicit clinician confirmation of the preview.
   if (provider.providerType === 'online' && !args.onlineSendConfirmed) {
     await db.ai.logOperation({
       ...baseRecord,
@@ -304,7 +384,7 @@ export async function runAiTask(args: GatewayRunArgs): Promise<{
     );
   }
 
-  // 4. Run with cancellation support.
+  // 5. Run with cancellation support.
   const token = args.operationToken ?? newOperationToken();
   const controller = new AbortController();
   inFlight.set(token, controller);
@@ -327,6 +407,8 @@ export async function runAiTask(args: GatewayRunArgs): Promise<{
       consentStatus: consent.status,
       status: 'completed',
       durationMs: Date.now() - startedAt,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
     });
     return { response, operationId: op.id };
   } catch (error) {

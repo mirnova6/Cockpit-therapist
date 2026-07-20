@@ -215,7 +215,8 @@ try {
   console.log('Phase 2: review queue');
   await page.click('a:has-text("Review queue")');
   await page.waitForSelector('h2:has-text("Review queue")');
-  check('deferred fact waits in queue', await page.isVisible('.badge:has-text("Extracted fact")'));
+  await page.waitForSelector('.badge:has-text("Extracted fact")');
+  check('deferred fact waits in queue', true);
   await page.locator('.card button.btn--primary:has-text("Approve")').first().click();
   await page.waitForSelector('text=Review queue is clear');
   check('queue clears after approval', true);
@@ -439,6 +440,94 @@ try {
   await page.click('button:has-text("Processing steps")');
   check('all 20 pipeline steps recorded', await page.isVisible('text=Require clinician review'));
   await page.screenshot({ path: `${OUT}19-update-summary.png` });
+
+
+  // ========================================= Phase 5: evaluation harness
+  console.log('Phase 5: Clinical AI Evaluation harness');
+  await page.goto(`${BASE}/#/evaluation`);
+  await page.waitForSelector('text=Clinical AI Evaluation');
+  check('fictional-only separation stated', await page.isVisible('text=Fictional test clients only'));
+  check('built-in library lists 10 fictional cases', (await page.locator('.list-row:has-text("Fictional")').count()) >= 10);
+  await page.selectOption('select.select >> nth=0', { label: 'Severe alcohol use disorder with ambivalence and relapse triggers' });
+  await page.selectOption('select.select >> nth=1', { label: 'Extraction' });
+  await page.click('button:has-text("Run evaluation")');
+  await page.waitForSelector('text=Internal score', { timeout: 30000 });
+  check('extraction evaluation produced metrics', await page.isVisible('.badge:has-text("Precision")'));
+  check('hallucination metrics shown', await page.isVisible('text=Unsupported rate'));
+  check('known trap avoided', await page.isVisible('.badge:has-text("Avoided")'));
+  check('output clearly labeled fictional', await page.isVisible('text=Generated output (fictional content)'));
+  await page.screenshot({ path: `${OUT}20-eval-run.png` });
+
+  // Risk-safety evaluation on the historical-SI case.
+  await page.goto(`${BASE}/#/evaluation`);
+  await page.waitForSelector('text=Clinical AI Evaluation');
+  await page.selectOption('select.select >> nth=0', { label: 'Suicidal ideation history with no current ideation' });
+  await page.selectOption('select.select >> nth=1', { label: 'Risk-related summary' });
+  await page.click('button:has-text("Run evaluation")');
+  await page.waitForSelector('text=Risk-safety evaluation', { timeout: 30000 });
+  check('no false current-risk inference from history', await page.isVisible('.badge:has-text("False current-risk inferences 0")'));
+  check('no autonomous risk determination', await page.isVisible('.badge:has-text("No autonomous determination")'));
+  check('risk items individually reviewed', await page.isVisible('.badge:has-text("Individual review enforced")'));
+
+  // Model comparison view.
+  await page.goto(`${BASE}/#/evaluation/compare`);
+  await page.waitForSelector('text=Model comparison');
+  await page.selectOption('select.select >> nth=0', { label: 'Severe alcohol use disorder with ambivalence and relapse triggers' });
+  await page.selectOption('select.select >> nth=1', { label: 'Extraction' });
+  await page.waitForSelector('text=Nothing left this device');
+  check('comparison shows deterministic column with score and device status', await page.isVisible('.badge:has-text("score")'));
+
+  // ============================================ Phase 5: audit & ops viewer
+  console.log('Phase 5: audit viewer and AI operations log');
+  await page.goto(`${BASE}/#/audit`);
+  await page.waitForSelector('text=Audit viewer');
+  check('audit entries listed with categories', (await page.locator('.list-row').count()) > 5);
+  await page.click('button:has-text("AI operations")');
+  await page.waitForSelector('text=AI operations viewer');
+  check('eval operations keyed by test case id', await page.isVisible('text=test case'));
+  check('operations marked on-device', await page.isVisible('.badge:has-text("on-device")'));
+  const opsContent = await page.textContent('main');
+  check('no fictional transcript text in the operations view', !opsContent.includes('vodka'));
+  await page.screenshot({ path: `${OUT}21-audit-ops.png` });
+
+  // ======================================= Phase 5: provider registry
+  console.log('Phase 5: provider approval registry');
+  await page.goto(`${BASE}/#/providers`);
+  await page.waitForSelector('text=Provider approval registry');
+  await page.click('button:has-text("Add provider entry")');
+  await page.locator('.modal label:has-text("Provider name") input').fill('Anthropic (Claude API)');
+  await page.click('.modal button:has-text("Save entry")');
+  await page.waitForSelector('.badge:has-text("Not approved")');
+  check('registry entry saved as Not approved by default', true);
+  check('enforcement explained (no PHI without approval)', await page.isVisible('text=no PHI is sent unless'));
+
+  // ==================================== Phase 5: feedback dashboard
+  await page.goto(`${BASE}/#/feedback`);
+  await page.waitForSelector('text=Clinician feedback dashboard');
+  check('feedback dashboard loads with honest empty state', await page.isVisible('text=No feedback recorded yet'));
+
+  // ================================ Phase 5: semantic retrieval settings
+  await page.goto(`${BASE}/#/settings`);
+  await page.waitForSelector('text=Semantic retrieval (preparation)');
+  check('semantic retrieval clearly disabled by default', await page.isVisible('.badge:has-text("Semantic retrieval NOT active")'));
+  check('emergency disable switch present and off', !(await page.locator('label:has-text("Emergency disable switch") input').isChecked()));
+
+  // =========================== Phase 5: readiness checklist and report
+  console.log('Phase 5: readiness checklist and production report');
+  await page.goto(`${BASE}/#/readiness`);
+  await page.waitForSelector('text=Security & compliance readiness checklist');
+  check('checklist disclaims compliance', await page.isVisible('text=does NOT establish HIPAA compliance'));
+  check('HIPAA policy review category present', await page.isVisible('text=HIPAA policy review'));
+  await page.locator('.soft button.btn--ghost').first().click();
+  await page.locator('label:has-text("Status") select').first().selectOption('reviewed');
+  await page.waitForSelector('.soft:has-text("by Dr. Rivera")', { timeout: 15000 });
+  check('checklist item status persisted with reviewer stamp', true);
+  await page.click('button:has-text("Generate report")');
+  await page.waitForSelector('pre:has-text("PRODUCTION READINESS REPORT")', { timeout: 30000 });
+  check('report requires legal/security review wording', await page.isVisible('text=requires legal/security review'));
+  check('report lists items required before online PHI', await page.isVisible('text=REQUIRED BEFORE ONLINE PHI PROCESSING'));
+  check('report export controls available', await page.isVisible('button:has-text("Export text")'));
+  await page.screenshot({ path: `${OUT}22-readiness.png` });
 
   // -------------------------- app close + reopen (fresh JS context)
   // Simulates quitting and relaunching the app: a brand-new page has no

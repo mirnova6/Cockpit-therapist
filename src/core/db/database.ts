@@ -3,6 +3,8 @@
  * One instance exists per unlocked session; locking discards it.
  */
 import { AiRepository } from '../ai/aiRepository';
+import { EvalRepository } from '../eval/evalRepository';
+import { GovernanceRepository } from '../governance/governanceRepository';
 import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
@@ -55,6 +57,10 @@ export class ClinicalDatabase {
   readonly knowledge: KnowledgeRepository;
   /** Phase 4 formulations, strategies, update summaries, assistant threads. */
   readonly intelligence: IntelligenceRepository;
+  /** Phase 5 evaluation harness (fictional cases + runs; sandboxed execution). */
+  readonly evaluation: EvalRepository;
+  /** Phase 5 governance: provider approvals, readiness checklist, embeddings. */
+  readonly governance: GovernanceRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
@@ -74,6 +80,14 @@ export class ClinicalDatabase {
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
     this.intelligence = new IntelligenceRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.evaluation = new EvalRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.governance = new GovernanceRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
@@ -170,6 +184,7 @@ export class ClinicalDatabase {
 
   /** Permanently removes the client and every associated record and blob. */
   async deleteClient(id: string, author: string): Promise<void> {
+    await this.governance.deleteAllForClient(id);
     await this.intelligence.deleteAllForClient(id);
     await this.ai.deleteAllForClient(id);
     await this.documents.deleteAllForClient(id);

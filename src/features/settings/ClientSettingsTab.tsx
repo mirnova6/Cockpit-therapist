@@ -66,6 +66,30 @@ export function ClientSettingsTab() {
         </dl>
       </Card>
 
+      <Card title="AI processing for this client" icon="shield">
+        <label className="cluster small" style={{ gap: 8, alignItems: 'flex-start' }}>
+          <input
+            type="checkbox"
+            checked={client.aiLocalOnly ?? false}
+            onChange={(e) =>
+              void updateClient(
+                client.id,
+                { aiLocalOnly: e.target.checked },
+                e.target.checked
+                  ? 'Marked client local-only for AI processing'
+                  : 'Removed local-only AI restriction',
+              )
+            }
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            <strong>Local-only override.</strong> When checked, nothing about this client can be sent to an
+            online AI or embeddings provider — the gateway refuses regardless of per-entry consent flags,
+            workspace settings, or provider approvals. Deterministic and local processing stay available.
+          </span>
+        </label>
+      </Card>
+
       <Card title="Export" icon="download">
         <div className="spread">
           <div>

@@ -282,4 +282,62 @@ describe('backupService', () => {
     const restoredClient = (await restored.listClients())[0];
     expect(await restored.intelligence.listFormulations(restoredClient.id)).toHaveLength(1);
   });
+
+  it('round-trips Phase 5 records (eval runs, approvals, checklist)', async () => {
+    const sourceName = `test-backup-p5-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p5-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-5' });
+    await sourceDb.evaluation.saveRun({
+      caseId: 'fict-01-aud-ambivalence',
+      caseTitle: 'Severe alcohol use disorder with ambivalence and relapse triggers',
+      caseSource: 'built-in',
+      taskType: 'extraction',
+      providerType: 'deterministic',
+      providerId: 'deterministic',
+      modelId: 'none',
+      startedAt: '2026-07-20T00:00:00Z',
+      finishedAt: '2026-07-20T00:00:01Z',
+      durationMs: 1000,
+      status: 'completed',
+      outputPreview: 'FICTIONAL-OUTPUT vodka nights',
+      qualityChecks: [],
+      trapResults: [],
+      errors: [],
+      score: 90,
+      phiLeftDevice: false,
+    });
+    await sourceDb.governance.saveApproval(
+      {
+        providerId: 'anthropic-online',
+        providerName: 'Anthropic',
+        providerType: 'online',
+        model: 'claude-sonnet-5',
+        approvalStatus: 'approved',
+        baaStatus: 'signed',
+        approvedPurposes: [],
+        disallowedPurposes: [],
+      },
+      'Dr. Osei',
+    );
+    const checklist = await sourceDb.governance.listChecklist();
+    await sourceDb.governance.updateChecklistItem(checklist[0].id, { status: 'reviewed' }, 'Dr. Osei');
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    // Even fictional eval output is stored encrypted.
+    expect(JSON.stringify(backup.records)).not.toContain('FICTIONAL-OUTPUT');
+
+    const targetAuth = makeService(targetName);
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-5');
+    expect(await restored.evaluation.listRuns()).toHaveLength(1);
+    expect((await restored.governance.listApprovals())[0].approvalStatus).toBe('approved');
+    const restoredChecklist = await restored.governance.listChecklist();
+    expect(restoredChecklist.some((i) => i.status === 'reviewed')).toBe(true);
+  });
 });

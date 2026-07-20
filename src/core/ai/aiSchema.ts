@@ -74,6 +74,22 @@ export interface AiSettings {
   /** Apply deterministic redaction before online sending (preview shown). */
   redactBeforeSend: boolean;
 
+  /**
+   * EMERGENCY DISABLE (§17): when true, every online send is refused
+   * immediately, regardless of any other setting or attestation.
+   */
+  onlineKillSwitch: boolean;
+
+  // ---- semantic retrieval preparation (§16) ----
+  /** 'none' = lexical retrieval only (the default, honestly labeled). */
+  embeddingProviderType: 'none' | 'local' | 'online';
+  embeddingLocalEndpoint: string;
+  embeddingLocalModel: string;
+  /** OpenAI-compatible embeddings endpoint for the online provider. */
+  embeddingOnlineEndpoint: string;
+  embeddingOnlineModel: string;
+  embeddingOnlineApiKey?: string;
+
   updatedAt: string;
 }
 
@@ -86,6 +102,12 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   baaConfirmed: false,
   onlinePhiApproved: false,
   redactBeforeSend: false,
+  onlineKillSwitch: false,
+  embeddingProviderType: 'none',
+  embeddingLocalEndpoint: 'http://localhost:11434',
+  embeddingLocalModel: '',
+  embeddingOnlineEndpoint: '',
+  embeddingOnlineModel: '',
   updatedAt: '',
 };
 
@@ -99,7 +121,11 @@ export type AiConsentStatus =
   | 'verified'
   | 'refused-missing-consent'
   | 'refused-provider-not-approved'
-  | 'refused-online-disabled';
+  | 'refused-online-disabled'
+  | 'refused-kill-switch'
+  | 'refused-client-local-only'
+  | 'refused-purpose-not-approved'
+  | 'refused-approval-expired';
 
 /**
  * One entry per AI operation. Contains identifiers and metadata only —
@@ -131,6 +157,9 @@ export interface AiOperationRecord {
   /** Sanitized error label (no clinical content). */
   errorKind?: string;
   durationMs?: number;
+  /** Token/length estimates when the provider reports them. */
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export const AI_OUTPUT_SCHEMA_VERSION = '2026-07-p4.1';

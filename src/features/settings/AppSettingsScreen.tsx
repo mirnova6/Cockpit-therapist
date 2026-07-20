@@ -10,6 +10,7 @@ import { fmtDateTime } from '../../lib/format';
 import { useAuthStore } from '../../state/authStore';
 import { useDataStore } from '../../state/dataStore';
 import { AiSettingsCard } from './AiSettingsCard';
+import { SemanticRetrievalCard } from './SemanticRetrievalCard';
 
 export function AppSettingsScreen() {
   const navigate = useNavigate();
@@ -201,6 +202,8 @@ export function AppSettingsScreen() {
         </Card>
 
         <AiSettingsCard />
+
+        <SemanticRetrievalCard />
 
         <Card title="Backup & restore" icon="download">
           <div className="stack">

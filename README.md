@@ -18,7 +18,7 @@ infrastructure, agreements, and legal review.
 | **2 — Structured clinical data** | Extracted facts with rule-based extraction preview, assessment tracking with official scoring rules, hypotheses, evidence links, contradictions & missing-information tracking, review queue, version history, structured profile | ✅ **Complete & tested** |
 | **3 — Documentation** | DAP note generator, Master Treatment Plan generator, goals & objectives editor, per-segment evidence linking, document review/approval with risk gating, version comparison, approved-only export | ✅ **Complete & tested** |
 | **4 — Clinical intelligence** | ClinicalAIProvider architecture (deterministic / local / secure-online), client-record RAG with debug panel, clinician-managed knowledge base, 20-step Analyze-and-Update pipeline, living case formulations, intervention recommendations, safety & trust strategy, client-specific assistant, unsupported-claim verification, clinician feedback | ✅ **Complete & tested** |
-| 5 — Quality & security | Clinical AI evaluation harness, hallucination metrics, expanded audit, online-mode controls | Not started |
+| **5 — Quality & security** | Fictional-case evaluation harness with quality/risk/hallucination metrics, model comparison, feedback dashboard, audit & AI-operations viewers, provider approval registry with purpose gating, emergency disable switch, per-client local-only override, semantic-retrieval preparation (EmbeddingProvider seam), readiness checklist, exportable production readiness report | ✅ **Complete & tested** |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -217,6 +217,56 @@ metadata and labeled honestly in the UI.
   always visibly labeled, and locking the workspace cancels in-flight AI operations
   and clears all AI state.
 
+## What works in Phase 5
+
+- **Clinical AI Evaluation harness** — a dedicated area (fully separate from real
+  clients) that runs FICTIONAL test cases through the real engines inside an
+  ephemeral, encrypted, in-memory sandbox: fictional material never touches the
+  client database and real records are never read. Ten built-in fictional cases
+  (alcohol use with ambivalence, depression with shame, GAD with reassurance
+  seeking, PTSD, high relapse risk, complicated grief, attachment conflict,
+  guarded client, historical SI with current denial, conflicting reports) each
+  carry raw material, expected extraction/risk/formulation/plan/intervention
+  targets, and known traps (no current SI from history, no score→diagnosis, no
+  avoidance-as-resistance, no trauma processing before stabilization, no invented
+  MSE, no ignored contradictions, no hypothesis-as-fact). Custom fictional cases
+  can be added as validated JSON. All ten §4 task types run for real.
+- **Metrics** — extraction precision/recall/F1 with category/risk/excerpt error
+  lists; hallucination metrics over the Phase 4 claim statuses with the exact
+  failing sentence and reason; retrieval quality (expected retrieved/missed with
+  failure explanations, contradiction retrieval, longitudinal coverage, isolation);
+  DAP/plan/formulation/intervention quality checks; risk-safety metrics scored
+  separately with high-priority failures. All labeled internal quality checks —
+  never clinically validated measures.
+- **Model comparison** — the latest run per provider (deterministic / local /
+  online) for one fictional case+task, side by side: score, missed items,
+  unsupported claims, trap results, risk handling, rating, duration, and
+  data-leaving-device status. Real client data is never used.
+- **Feedback dashboard** — read-only trends across all 13 feedback labels with
+  filters (client, provider, output type, date, label); feedback never changes
+  records and never crosses clients.
+- **Audit & AI operations viewers** — category and action-type filters covering
+  every §14 review need; the operations table shows provider/model/mode, consent
+  and attestation status, source/knowledge counts, token estimates, timings,
+  status, and error category — never prompt text.
+- **Organizational online controls** — provider approval registry (BAA status,
+  per-purpose allow/deny, expiration, key-rotation reminders) that the gateway
+  ENFORCES for online sends; an emergency disable switch that refuses every
+  online send instantly; a per-client local-only override honored by AI and
+  embeddings alike.
+- **Semantic retrieval preparation** — an `EmbeddingProvider` seam (deterministic
+  lexical default, local OpenAI-compatible, secure online) with client-namespaced
+  encrypted vectors that are regenerable, excluded from exports, and deleted with
+  the client. Online embedding obeys every online-AI gate. The UI states plainly
+  that semantic retrieval is NOT active unless a real provider is configured;
+  a preview search compares vector vs lexical ranking when one is.
+- **Readiness checklist & production report** — 20 seeded categories (encryption
+  through HIPAA policy review) with status/notes/evidence/reviewer/review dates,
+  and an exportable report assembling live workspace state with known
+  limitations and the items required before real client data, online PHI, or
+  multi-user deployment. Both carry explicit "requires legal/security review"
+  wording — no compliance claims, ever.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -235,6 +285,12 @@ metadata and labeled honestly in the UI.
   text as untrusted data, AI providers have no database write authority, cross-client
   evidence is rejected before every retrieval/generation/save, and locking cancels
   in-flight AI operations and clears all AI state.
+- Phase 5: fictional evaluation runs execute in an ephemeral in-memory sandbox under
+  an ephemeral key (test data can never mix with real clients), the provider approval
+  registry and emergency disable switch gate online sends at the gateway, per-client
+  local-only overrides beat every other setting, embeddings are client-namespaced,
+  encrypted, export-excluded, and deleted with the client, and the readiness tooling
+  never claims compliance — every artifact carries "requires legal/security review".
 
 ## Architecture
 
@@ -253,12 +309,18 @@ src/
     extraction/            ExtractionProvider seam: rule-based + AI providers
     documents/             DocumentGenerationProvider seam: template + AI providers
     ai/                    ClinicalAIProvider seam, gateway (consent/isolation/logging/
-                           cancellation), Anthropic + local transports, redaction,
-                           prompt assembly, claim verification
+                           cancellation, kill switch, registry enforcement), Anthropic +
+                           local transports, redaction, prompt assembly, claim verification
     rag/                   deterministic lexical client-record retrieval + debug
     knowledge/             clinician-managed knowledge base (chunking, approval,
                            retrieval with citation preservation)
     pipeline/              20-step Analyze-and-Update reasoning pipeline
+    eval/                  Phase 5 evaluation harness: fictional cases, metrics,
+                           trap evaluators, ephemeral sandbox, task runners
+    governance/            provider approval registry, readiness checklist,
+                           production readiness report, embedding records
+    embeddings/            EmbeddingProvider seam + embedding service (semantic
+                           retrieval preparation)
     formulation/           10-framework living case-formulation engine + diffing
     interventions/         rule-based intervention recommendation engine
     strategy/              safety & trust strategy engine
@@ -268,9 +330,9 @@ src/
   state/                   zustand stores bridging core ←→ UI
   features/                auth, clients, dashboard, inputs, profile, assessments,
                            hypotheses, evidence, extraction, review, documents, goals,
-                           intelligence, knowledge, settings
+                           intelligence, knowledge, evaluation, governance, settings
   app/                     design system (theme.css), shared components, router
-e2e/smoke.mjs              browser-level end-to-end verification (75 checks)
+e2e/smoke.mjs              browser-level end-to-end verification (100 checks)
 ```
 
 Replaceability seams for later phases: the storage engine sits behind `StorageAdapter`
@@ -283,14 +345,17 @@ same repositories without touching the UI layer.
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 181 unit tests: crypto, auth, repositories, structured data,
+npm test             # 208 unit tests: crypto, auth, repositories, structured data,
                      # extraction rules, assessment scoring, documents, backup,
-                     # AI gateway/consent/isolation, RAG, knowledge base,
-                     # verification, pipeline, formulation, interventions, assistant
+                     # AI gateway/consent/isolation, RAG, knowledge base, verification,
+                     # pipeline, formulation, interventions, assistant, evaluation
+                     # harness, governance controls, embeddings
 npm run typecheck    # strict TS
 npm run build        # production build
-node e2e/smoke.mjs   # 75-check browser E2E: setup → clients → risk review →
+node e2e/smoke.mjs   # 100-check browser E2E: setup → clients → risk review →
                      # extraction → profile → assessments → documents → AI settings →
                      # knowledge → formulation → interventions → assistant →
-                     # Analyze-and-Update → relaunch → encrypted-at-rest check
+                     # Analyze-and-Update → evaluation harness → audit/ops viewers →
+                     # provider registry → readiness report → relaunch →
+                     # encrypted-at-rest check
 ```
