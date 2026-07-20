@@ -8,6 +8,8 @@ import {
   DEFAULT_PBKDF2_ITERATIONS,
   deriveWrappingKey,
   generateDataKey,
+  generateRawWrappingKey,
+  importRawWrappingKey,
   randomSalt,
   unwrapDataKey,
   wrapDataKey,
@@ -16,16 +18,28 @@ import {
 } from '../crypto/cryptoService';
 import { ClinicalDatabase } from '../db/database';
 import { IndexedDbAdapter, type StorageAdapter } from '../storage/indexedDbAdapter';
+import {
+  DEVICE_KEY_ACCOUNT,
+  NullSecureKeyStore,
+  type SecureKeyStore,
+} from './secureKeyStore';
 
 interface KeySlot {
   params: DerivationParams;
   wrapped: WrappedKey;
 }
 
+/** Device-unlock slot: DEK wrapped by a key held only in the OS keystore. */
+interface DeviceSlot {
+  wrapped: WrappedKey;
+  createdAt: string;
+}
+
 interface Keyring {
   version: 1;
   passphrase: KeySlot;
   pin?: KeySlot;
+  device?: DeviceSlot;
 }
 
 export interface Profile {
@@ -59,6 +73,14 @@ const META = { keyring: 'keyring', profile: 'profile', security: 'security' } as
 export interface AuthServiceOptions {
   dbName?: string;
   iterations?: number;
+  /**
+   * Native shells inject a durable adapter factory (FileBackedAdapter over
+   * the platform filesystem). Defaults to IndexedDB so the browser build is
+   * unchanged.
+   */
+  adapterFactory?: (dbName: string) => Promise<StorageAdapter>;
+  /** Native shells inject an OS-keystore-backed SecureKeyStore. */
+  keyStore?: SecureKeyStore;
 }
 
 export class AuthService {
@@ -66,15 +88,37 @@ export class AuthService {
   private session: { db: ClinicalDatabase; dek: CryptoKey } | null = null;
   private dbName: string;
   private iterations: number;
+  private adapterFactory: (dbName: string) => Promise<StorageAdapter>;
+  private keyStore: SecureKeyStore;
 
   constructor(opts: AuthServiceOptions = {}) {
     this.dbName = opts.dbName ?? 'cockpit-clinical';
     this.iterations = opts.iterations ?? DEFAULT_PBKDF2_ITERATIONS;
+    this.adapterFactory = opts.adapterFactory ?? ((name) => IndexedDbAdapter.open(name));
+    this.keyStore = opts.keyStore ?? new NullSecureKeyStore();
+  }
+
+  /**
+   * Reconfigures the singleton for a native shell (durable file storage + OS
+   * keystore) BEFORE any adapter is opened. Called from the app bootstrap;
+   * a no-op after the adapter exists so a live session is never disrupted.
+   */
+  configure(opts: {
+    adapterFactory?: (dbName: string) => Promise<StorageAdapter>;
+    keyStore?: SecureKeyStore;
+  }): void {
+    if (this.adapter || this.session) return;
+    if (opts.adapterFactory) this.adapterFactory = opts.adapterFactory;
+    if (opts.keyStore) this.keyStore = opts.keyStore;
+  }
+
+  keyStoreLabel(): string {
+    return this.keyStore.label;
   }
 
   private async getAdapter(): Promise<StorageAdapter> {
     if (!this.adapter) {
-      this.adapter = await IndexedDbAdapter.open(this.dbName);
+      this.adapter = await this.adapterFactory(this.dbName);
     }
     return this.adapter;
   }
@@ -283,6 +327,85 @@ export class AuthService {
     const { pin: _removed, ...rest } = keyring;
     await adapter.putMeta(META.keyring, { ...rest } as Keyring);
     await this.session?.db.audit('security', 'pin.removed');
+  }
+
+  // ----------------------------------------------- OS device unlock (§4)
+
+  /** True only when a real OS-backed secure key store is present. */
+  async isDeviceUnlockAvailable(): Promise<boolean> {
+    return this.keyStore.isAvailable();
+  }
+
+  async hasDeviceUnlock(): Promise<boolean> {
+    const adapter = await this.getAdapter();
+    const keyring = await adapter.getMeta<Keyring>(META.keyring);
+    if (!keyring?.device) return false;
+    // Only real if the OS keystore still holds the wrapping key.
+    return Boolean(await this.keyStore.getSecret(DEVICE_KEY_ACCOUNT));
+  }
+
+  /**
+   * Enables OS device unlock. Requires an unlocked session (the DEK must be
+   * in memory to re-wrap). Generates a random wrapping key, stores it ONLY
+   * in the OS keystore, and adds a `device` keyring slot. No backdoor: the
+   * secret lives only in the keystore.
+   */
+  async enableDeviceUnlock(): Promise<void> {
+    if (!this.session) throw new AuthError('not-initialized', 'Unlock before enabling device unlock');
+    if (!(await this.keyStore.isAvailable())) {
+      throw new Error('OS secure key storage is not available in this environment.');
+    }
+    const adapter = await this.getAdapter();
+    const keyring = await adapter.getMeta<Keyring>(META.keyring);
+    if (!keyring) throw new AuthError('not-initialized', 'Workspace has not been set up');
+    const { key, rawBase64 } = await generateRawWrappingKey();
+    await this.keyStore.setSecret(DEVICE_KEY_ACCOUNT, rawBase64);
+    const device: DeviceSlot = {
+      wrapped: await wrapDataKey(this.session.dek, key),
+      createdAt: new Date().toISOString(),
+    };
+    await adapter.putMeta(META.keyring, { ...keyring, device });
+    await this.session.db.audit('security', 'device-unlock.enabled', `via ${this.keyStore.label}`);
+  }
+
+  async unlockWithDevice(): Promise<ClinicalDatabase> {
+    const adapter = await this.getAdapter();
+    await this.checkLockout();
+    const keyring = await adapter.getMeta<Keyring>(META.keyring);
+    if (!keyring) throw new AuthError('not-initialized', 'Workspace has not been set up');
+    if (!keyring.device) throw new AuthError('no-pin', 'Device unlock is not configured');
+    const rawBase64 = await this.keyStore.getSecret(DEVICE_KEY_ACCOUNT);
+    if (!rawBase64) {
+      // The OS keystore entry is gone (device wiped / reinstalled). This is
+      // not a wrong credential — surface it as unavailable, not a failure
+      // that trips the lockout counter.
+      throw new AuthError('no-pin', 'The device key is no longer in OS secure storage. Unlock with your passphrase.');
+    }
+    let dek: CryptoKey;
+    try {
+      const key = await importRawWrappingKey(rawBase64);
+      dek = await unwrapDataKey(keyring.device.wrapped, key);
+    } catch {
+      return this.recordFailure();
+    }
+    await this.setSecurity({ failedCount: 0, lockoutUntil: undefined });
+    const profile = await this.getProfile();
+    if (profile) await adapter.putMeta(META.profile, { ...profile, lastLoginAt: new Date().toISOString() });
+    const db = new ClinicalDatabase(adapter, dek);
+    this.session = { db, dek };
+    await db.audit('auth', 'session.unlocked', 'device unlock');
+    return db;
+  }
+
+  async disableDeviceUnlock(): Promise<void> {
+    const adapter = await this.getAdapter();
+    const keyring = await adapter.getMeta<Keyring>(META.keyring);
+    await this.keyStore.deleteSecret(DEVICE_KEY_ACCOUNT);
+    if (keyring?.device) {
+      const { device: _removed, ...rest } = keyring;
+      await adapter.putMeta(META.keyring, { ...rest } as Keyring);
+    }
+    await this.session?.db.audit('security', 'device-unlock.disabled');
   }
 
   // --------------------------------------------------------- teardown

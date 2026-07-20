@@ -5,6 +5,7 @@ import { Badge, Card, Field } from '../../app/components/ui';
 import { PROVIDER_TYPE_LABELS, type AiProviderType } from '../../core/ai/aiSchema';
 import { fmtDateTime } from '../../lib/format';
 import { useAiStore } from '../../state/aiStore';
+import { LocalAiGuide } from './LocalAiGuide';
 
 export function AiSettingsCard() {
   const settings = useAiStore((s) => s.settings);
@@ -22,6 +23,7 @@ export function AiSettingsCard() {
   const [onlineModel, setOnlineModel] = useState(settings.onlineModel);
   const [testing, setTesting] = useState(false);
   const [showOps, setShowOps] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     setLocalUrl(settings.localEndpointUrl);
@@ -117,6 +119,9 @@ export function AiSettingsCard() {
             <div className="cluster">
               <button className="btn btn--secondary btn--sm" disabled={testing} onClick={() => void saveLocal()}>
                 <Icon name="check" size={13} /> Save & test connection
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={() => setShowGuide(true)}>
+                <Icon name="info" size={13} /> Local AI setup guide
               </button>
               {readiness['local-endpoint'] && (
                 <span className={`small ${readiness['local-endpoint'].ready ? '' : 'muted'}`}>
@@ -269,6 +274,7 @@ export function AiSettingsCard() {
           </div>
         )}
       </div>
+      {showGuide && <LocalAiGuide onClose={() => setShowGuide(false)} />}
     </Card>
   );
 }

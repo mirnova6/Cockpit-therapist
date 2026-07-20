@@ -91,6 +91,34 @@ export async function generateDataKey(): Promise<CryptoKey> {
   ]);
 }
 
+/**
+ * Generates a random 256-bit wrapping key and returns its raw bytes as
+ * base64. Used for OS-keystore device unlock (Phase 6): the raw key is
+ * stored ONLY in the platform secure store; the data key is wrapped by it
+ * into a keyring slot. No passphrase is involved in this slot.
+ */
+export async function generateRawWrappingKey(): Promise<{ key: CryptoKey; rawBase64: string }> {
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
+    'wrapKey',
+    'unwrapKey',
+    'encrypt',
+    'decrypt',
+  ]);
+  const raw = await crypto.subtle.exportKey('raw', key);
+  return { key, rawBase64: toBase64(raw) };
+}
+
+/** Imports a raw base64 wrapping key retrieved from the OS secure store. */
+export async function importRawWrappingKey(rawBase64: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    fromBase64(rawBase64),
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['wrapKey', 'unwrapKey', 'encrypt', 'decrypt'],
+  );
+}
+
 export async function wrapDataKey(dek: CryptoKey, kek: CryptoKey): Promise<WrappedKey> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const wrapped = await crypto.subtle.wrapKey('raw', dek, kek, { name: 'AES-GCM', iv });

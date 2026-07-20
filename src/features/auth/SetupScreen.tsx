@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Icon } from '../../app/components/Icon';
 import { Field } from '../../app/components/ui';
 import { authService } from '../../core/auth/authService';
-import { isValidBackup, restoreBackup } from '../../core/backup/backupService';
+import { inspectBackup, restoreBackup } from '../../core/backup/backupService';
 import { IndexedDbAdapter } from '../../core/storage/indexedDbAdapter';
 import { useAuthStore } from '../../state/authStore';
 
@@ -48,18 +48,21 @@ export function SetupScreen() {
     setBusy(true);
     try {
       const parsed = JSON.parse(await file.text());
-      if (!isValidBackup(parsed)) {
-        setError('That file is not a valid Cockpit backup.');
+      const inspection = await inspectBackup(parsed);
+      if (!inspection.valid) {
+        setError(`This backup cannot be restored: ${inspection.blockers.join(' ')}`);
         return;
       }
       const adapter = await IndexedDbAdapter.open();
-      await restoreBackup(adapter, parsed);
+      const result = await restoreBackup(adapter, parsed);
       adapter.close();
       await authService.close();
       await refresh();
-      setRestoreMsg('Backup restored. Unlock with the passphrase that protected the backup.');
-    } catch {
-      setError('Could not read that backup file.');
+      setRestoreMsg(
+        `Backup restored (${result.restored.records} records, ${result.restored.blobs} attachments). Unlock with the passphrase that protected the backup.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read that backup file.');
     } finally {
       setBusy(false);
     }

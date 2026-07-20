@@ -32,6 +32,7 @@ import { AssistantTab } from '../features/intelligence/AssistantTab';
 import { FormulationTab } from '../features/intelligence/FormulationTab';
 import { InterventionsTab } from '../features/intelligence/InterventionsTab';
 import { SafetyTrustTab } from '../features/intelligence/SafetyTrustTab';
+import { GuidesScreen } from '../features/guides/GuidesScreen';
 import { KnowledgeScreen } from '../features/knowledge/KnowledgeScreen';
 import { GlobalReviewScreen } from '../features/review/GlobalReviewScreen';
 import { ReviewQueueTab } from '../features/review/ReviewQueueTab';
@@ -74,6 +75,7 @@ export function App() {
       <Route path="/feedback" element={<FeedbackDashboard />} />
       <Route path="/providers" element={<ProviderRegistryScreen />} />
       <Route path="/readiness" element={<ReadinessScreen />} />
+      <Route path="/guides" element={<GuidesScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />
         <Route path="add" element={<AddClinicalInputScreen />} />

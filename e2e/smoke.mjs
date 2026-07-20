@@ -529,6 +529,59 @@ try {
   check('report export controls available', await page.isVisible('button:has-text("Export text")'));
   await page.screenshot({ path: `${OUT}22-readiness.png` });
 
+  // ================================================= Phase 6: production hardening
+  console.log('Phase 6: device & storage, guides, local AI guide, backup preview');
+  await page.goto(`${BASE}/#/settings`);
+  await page.waitForSelector('text=Device & storage');
+  check('honest platform posture shown (browser dev storage)', await page.isVisible('text=Browser storage (development)'));
+  check('device unlock not offered without OS keystore', await page.isVisible('text=OS-level secure key storage is not available'));
+
+  // Local AI setup guide (honest "no local model connected" state).
+  await page.locator('summary:has-text("Local AI endpoint")').click();
+  await page.click('button:has-text("Local AI setup guide")');
+  await page.waitForSelector('text=Local AI setup guide');
+  check('local AI guide lists Ollama/LM Studio/llama.cpp', await page.isVisible('text=LM Studio'));
+  await page.locator('.modal label:has-text("Model name") input').fill('missing-model');
+  await page.click('.modal button:has-text("Run readiness check")');
+  await page.waitForSelector('.modal .badge:has-text("No local model connected")', { timeout: 15000 });
+  check('local AI guide reports no model connected honestly', true);
+  await page.click('.modal button:has-text("Done")');
+
+  // Processing status indicator is honest (local-only by default).
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('h1:has-text("Choose client")');
+  check('processing status indicator shows local-only', await page.isVisible('.topbar .badge:has-text("Local-only")'));
+
+  // Guides & checklists viewer bundles the Phase 6 docs offline.
+  await page.goto(`${BASE}/#/guides`);
+  await page.waitForSelector('text=Guides & checklists');
+  check('device testing checklist available in-app', await page.isVisible('text=Real-device testing checklist'));
+  check('security review checklist available in-app', await page.isVisible('text=Security review checklist'));
+  check('production blocker list available in-app', await page.isVisible('text=Production blocker list'));
+  await page.click('.list-row:has-text("Production blocker list")');
+  await page.waitForSelector('pre:has-text("Must fix before")');
+  check('blocker list renders content', true);
+  await page.screenshot({ path: `${OUT}23-phase6-guides.png` });
+
+  // Backup restore preview (integrity + counts before any write).
+  await page.goto(`${BASE}/#/settings`);
+  await page.waitForSelector('text=Backup & restore');
+  // Create a backup, capture the download, then feed it back to the restore preview.
+  const [backupDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('button:has-text("Create backup")'),
+  ]);
+  const backupPath = `${OUT}phase6-backup.json`;
+  await backupDownload.saveAs(backupPath);
+  await page.setInputFiles('input[type="file"][accept*="json"]', backupPath);
+  await page.waitForSelector('text=Restore preview');
+  check('restore preview shows integrity verified', await page.isVisible('.badge:has-text("Integrity verified")'));
+  check('restore preview shows record counts', await page.isVisible('text=record(s)'));
+  check('restore preview shows keyring present', await page.isVisible('text=keyring present'));
+  await page.screenshot({ path: `${OUT}24-restore-preview.png` });
+  // Cancel — we don't need to actually replace the workspace here.
+  await page.click('.modal button:has-text("Cancel")');
+
   // -------------------------- app close + reopen (fresh JS context)
   // Simulates quitting and relaunching the app: a brand-new page has no
   // in-memory state, so everything shown must come from IndexedDB.

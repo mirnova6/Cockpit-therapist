@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
+import { ProcessingStatusBadge } from '../../app/components/ProcessingStatusBadge';
 import { Badge, EmptyState, RiskBadge } from '../../app/components/ui';
 import { useStructuredStore } from '../../state/structuredStore';
 import {
@@ -131,7 +132,7 @@ export function ChooseClientScreen() {
           <span className="topbar__logo"><Icon name="compass" size={17} /></span>
           Cockpit
         </div>
-        <Badge tone="green" icon="shield">Local-only</Badge>
+        <ProcessingStatusBadge />
         <div className="topbar__spacer" />
         <button className="icon-btn" aria-label="Workspace settings" title="Workspace settings" onClick={() => navigate('/settings')}>
           <Icon name="settings" />

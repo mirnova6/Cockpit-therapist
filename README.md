@@ -19,6 +19,7 @@ infrastructure, agreements, and legal review.
 | **3 — Documentation** | DAP note generator, Master Treatment Plan generator, goals & objectives editor, per-segment evidence linking, document review/approval with risk gating, version comparison, approved-only export | ✅ **Complete & tested** |
 | **4 — Clinical intelligence** | ClinicalAIProvider architecture (deterministic / local / secure-online), client-record RAG with debug panel, clinician-managed knowledge base, 20-step Analyze-and-Update pipeline, living case formulations, intervention recommendations, safety & trust strategy, client-specific assistant, unsupported-claim verification, clinician feedback | ✅ **Complete & tested** |
 | **5 — Quality & security** | Fictional-case evaluation harness with quality/risk/hallucination metrics, model comparison, feedback dashboard, audit & AI-operations viewers, provider approval registry with purpose gating, emergency disable switch, per-client local-only override, semantic-retrieval preparation (EmbeddingProvider seam), readiness checklist, exportable production readiness report | ✅ **Complete & tested** |
+| **6 — Packaging & production hardening** | Platform-detection seam, durable file-backed encrypted storage adapter (native), OS-level secure key storage for device unlock (no recovery backdoor), browser→native migration path, backup v2 with SHA-256 integrity + inspect/dry-run/no-partial-restore, in-app guides (packaging, storage, migration, device testing, security review, production blockers, online-proxy plan, PDF-ingestion plan), honest processing-status indicator, local-AI setup guide with real readiness check, Tauri/Capacitor shell skeletons | ✅ **Complete & tested** |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -267,6 +268,60 @@ metadata and labeled honestly in the UI.
   multi-user deployment. Both carry explicit "requires legal/security review"
   wording — no compliance claims, ever.
 
+## What works in Phase 6
+
+- **Platform detection & native seams** — a `detectPlatform()` seam distinguishes
+  browser / Tauri (desktop) / Capacitor (mobile) / test, and `platformCapabilities()`
+  reports whether durable file-system storage and OS key storage are available on the
+  current host. The UI states the real posture honestly — e.g. in a browser it shows
+  "Browser storage (development)" and does not offer capabilities the host cannot back.
+- **Durable local storage adapter** — `FileBackedAdapter` implements the same
+  `StorageAdapter` interface as IndexedDB, storing one encrypted JSON file per record,
+  blob, and meta entry under `meta/`, `records/`, and `blobs/` directories (base64url
+  filenames, `Uint8Array` preserved losslessly). It plugs in behind a small `FileStore`
+  interface (read / write / remove / list) that a Tauri or Capacitor shell implements
+  against the real file system — the encrypted envelopes are identical to the browser
+  build, so nothing about the crypto or schema changes across platforms.
+- **OS-level secure key storage & device unlock** — a `SecureKeyStore` seam (OS Keychain
+  / Keystore on native, honestly unavailable in the browser) enables optional device
+  unlock: a random wrapping key is generated and stored **only** in the OS secure
+  store, never on disk and never derivable from anything else. There is **no recovery
+  backdoor** — if the device is wiped or the key is removed from the OS store, unlock
+  falls back to the passphrase, and a lost passphrase still clearly means encrypted data
+  may be unrecoverable. A dedicated test verifies a wiped key store forces passphrase
+  unlock and never trips the lockout counter.
+- **Browser → native migration** — the same encrypted-backup pipeline moves a workspace
+  from the browser build to a native build: export an encrypted v2 backup, import it into
+  the native app, unlock with the same passphrase. No plaintext migration files are ever
+  written; a performance test exercises a 50-client / large-transcript workspace round-trip.
+- **Backup v2 hardening** — backups now carry a schema version, per-collection counts, and
+  a **SHA-256 checksum** over a canonical body. `inspectBackup()` previews any backup
+  (validity, version, counts, checksum status, blockers, warnings) before writing anything;
+  restore inspects first and **refuses to clear existing data unless the backup is valid**,
+  so a corrupt or truncated file can never leave a half-restored workspace. v1 backups
+  still restore (checksum reported "absent-legacy"). A dry-run mode validates without
+  writing. The restore screen shows the integrity badge and record counts before you commit.
+- **In-app guides & checklists** — eight planning/preparation documents are bundled
+  offline (no fetch) and readable inside the app at **/guides**: native packaging, durable
+  storage, browser→native migration, a per-device real-device testing checklist, a security
+  review checklist, a production blocker list (gates before fictional / de-identified / real
+  use), an online-AI proxy architecture plan, and a privacy-respecting PDF/document ingestion
+  plan. Every document is explicitly a planning artifact and makes no compliance claim.
+- **Honest processing-status indicator** — a status pill reflects the genuinely active AI
+  mode: "Local-only" by default, "Local AI — on this device" only when a local model
+  actually passes its readiness check, "Online AI — sends leave device" only when online
+  mode is truly active, and "Online disabled (kill switch)" when the emergency switch is on.
+  It never claims a mode that is not real.
+- **Local AI setup guide** — an in-app guide walks through Ollama / LM Studio / llama.cpp,
+  runs the real connectivity/readiness check, and reports "No local model connected"
+  honestly when none is served — it never pretends a model is active. Context-window and
+  performance caveats are stated up front.
+- **Native shell skeletons** — `native/` ships example Tauri config + Rust command
+  skeletons (file-store and keychain) and an example Capacitor config, documenting the
+  exact `FileStore` / `SecureKeyStore` contract a shell must satisfy. These are
+  integration scaffolding, not a built binary; the desktop/mobile store implementations
+  are the remaining native work called out in the production blocker list.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -291,18 +346,31 @@ metadata and labeled honestly in the UI.
   local-only overrides beat every other setting, embeddings are client-namespaced,
   encrypted, export-excluded, and deleted with the client, and the readiness tooling
   never claims compliance — every artifact carries "requires legal/security review".
+- Phase 6: the native file-backed storage adapter stores only encrypted envelopes (same
+  AES-256-GCM records as the browser build — no plaintext on disk); device unlock stores
+  a random wrapping key **only** in the OS Keychain/Keystore with **no recovery backdoor**
+  (a wiped key store forces passphrase unlock and never trips lockout, verified in tests);
+  browser→native migration goes exclusively through the encrypted backup pipeline (no
+  plaintext migration files); backup v2 adds a SHA-256 integrity checksum and a validate-
+  before-clear restore that refuses to leave a half-restored workspace; and the processing-
+  status indicator and local-AI guide never claim a mode or model that is not genuinely
+  active.
 
 ## Architecture
 
 React 18 + TypeScript + Vite, responsive from a 390px phone to desktop (sidebar on
 desktop, bottom navigation on mobile). The core is deliberately platform-agnostic so it
-can be wrapped with Capacitor (iOS/Android) and Tauri/Electron (macOS/Windows) later.
+can be wrapped with Capacitor (iOS/Android) and Tauri (macOS/Windows) — Phase 6 adds the
+platform-detection seam, a file-backed storage adapter, and OS key-storage seams those
+shells implement, plus example native configs under `native/`.
 
 ```
 src/
   core/                    platform-agnostic domain layer (no React imports)
-    crypto/                WebCrypto AES-GCM + PBKDF2 key wrapping
-    storage/               StorageAdapter interface + IndexedDB impl + EncryptedStore
+    crypto/                WebCrypto AES-GCM + PBKDF2 key wrapping + raw wrapping keys
+    platform/              platform detection, capabilities, native bridges, bootstrap
+    storage/               StorageAdapter interface + IndexedDB impl + file-backed
+                           adapter (native) + EncryptedStore
     db/                    schemas + ClinicalDatabase repositories (Phases 1–4:
                            structured, documents, intelligence, AI, knowledge)
     assessments/           assessment definitions with cited official scoring rules
@@ -325,37 +393,45 @@ src/
     interventions/         rule-based intervention recommendation engine
     strategy/              safety & trust strategy engine
     assistant/             client-specific assistant (retrieval-only + AI modes)
-    auth/                  AuthService: setup/unlock/lock/lockout/credential changes
-    backup/                encrypted workspace snapshot + restore
+    auth/                  AuthService: setup/unlock/lock/lockout/credential changes,
+                           OS-key-store device unlock (no backdoor) + SecureKeyStore seam
+    backup/                encrypted workspace snapshot + restore, backup v2 integrity
+                           (checksum, inspect, dry-run, no-partial-restore)
   state/                   zustand stores bridging core ←→ UI
   features/                auth, clients, dashboard, inputs, profile, assessments,
                            hypotheses, evidence, extraction, review, documents, goals,
-                           intelligence, knowledge, evaluation, governance, settings
+                           intelligence, knowledge, evaluation, governance, guides, settings
   app/                     design system (theme.css), shared components, router
-e2e/smoke.mjs              browser-level end-to-end verification (100 checks)
+docs/phase6/               8 offline planning docs (bundled into the app at /guides)
+native/                    example Tauri + Capacitor configs and command skeletons
+e2e/smoke.mjs              browser-level end-to-end verification (112 checks)
 ```
 
-Replaceability seams for later phases: the storage engine sits behind `StorageAdapter`
-(SQLite can replace IndexedDB), entities are collection-scoped in `ClinicalDatabase`
-(Phase 2 entities slot in beside existing ones), and AI/RAG components will consume the
-same repositories without touching the UI layer.
+Replaceability seams: the storage engine sits behind `StorageAdapter` (the Phase 6
+`FileBackedAdapter` shows a second implementation; SQLite could be a third), native
+hosts implement the small `FileStore` and `SecureKeyStore` interfaces, entities are
+collection-scoped in `ClinicalDatabase` (new entities slot in beside existing ones),
+and AI/RAG components consume the same repositories without touching the UI layer.
 
 ## Develop & test
 
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 208 unit tests: crypto, auth, repositories, structured data,
+npm test             # 234 unit tests: crypto, auth, repositories, structured data,
                      # extraction rules, assessment scoring, documents, backup,
                      # AI gateway/consent/isolation, RAG, knowledge base, verification,
                      # pipeline, formulation, interventions, assistant, evaluation
-                     # harness, governance controls, embeddings
+                     # harness, governance controls, embeddings, platform detection,
+                     # file-backed storage, device unlock (no backdoor), backup v2
+                     # integrity, storage performance + browser→native migration
 npm run typecheck    # strict TS
 npm run build        # production build
-node e2e/smoke.mjs   # 100-check browser E2E: setup → clients → risk review →
+node e2e/smoke.mjs   # 112-check browser E2E: setup → clients → risk review →
                      # extraction → profile → assessments → documents → AI settings →
                      # knowledge → formulation → interventions → assistant →
                      # Analyze-and-Update → evaluation harness → audit/ops viewers →
-                     # provider registry → readiness report → relaunch →
-                     # encrypted-at-rest check
+                     # provider registry → readiness report → device/storage posture →
+                     # local-AI guide → guides/checklists → backup restore preview →
+                     # relaunch → encrypted-at-rest check
 ```

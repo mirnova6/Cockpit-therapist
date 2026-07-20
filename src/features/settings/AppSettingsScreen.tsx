@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
+import { ProcessingStatusBadge } from '../../app/components/ProcessingStatusBadge';
 import { Badge, Card, Field, Modal } from '../../app/components/ui';
 import { authService } from '../../core/auth/authService';
-import { createBackup, isValidBackup, restoreBackup } from '../../core/backup/backupService';
+import {
+  createBackup,
+  inspectBackup,
+  restoreBackup,
+  type BackupInspection,
+  type WorkspaceBackup,
+} from '../../core/backup/backupService';
 import type { AuditEvent } from '../../core/db/schema';
 import { downloadJson } from '../../lib/download';
 import { fmtDateTime } from '../../lib/format';
 import { useAuthStore } from '../../state/authStore';
 import { useDataStore } from '../../state/dataStore';
 import { AiSettingsCard } from './AiSettingsCard';
+import { DeviceStorageCard } from './DeviceStorageCard';
 import { SemanticRetrievalCard } from './SemanticRetrievalCard';
 
 export function AppSettingsScreen() {
@@ -27,6 +35,8 @@ export function AppSettingsScreen() {
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [restoreFile, setRestoreFile] = useState<File>();
   const [restoreErr, setRestoreErr] = useState<string>();
+  const [restorePreview, setRestorePreview] = useState<BackupInspection>();
+  const [parsedBackup, setParsedBackup] = useState<WorkspaceBackup>();
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -83,22 +93,45 @@ export function AppSettingsScreen() {
     setBusy(false);
   };
 
+  // Inspect the chosen file (checksum, counts, compatibility) WITHOUT
+  // touching the workspace, so the clinician sees a restore preview first.
+  const previewRestore = async (file: File) => {
+    setRestoreErr(undefined);
+    setRestorePreview(undefined);
+    setParsedBackup(undefined);
+    setRestoreFile(file);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const inspection = await inspectBackup(parsed);
+      setRestorePreview(inspection);
+      if (inspection.valid) setParsedBackup(parsed as WorkspaceBackup);
+    } catch {
+      setRestorePreview({
+        valid: false,
+        blockers: ['The file could not be parsed as JSON — it is not a Cockpit backup.'],
+        warnings: [],
+        version: 'unknown',
+        counts: { meta: 0, records: 0, blobs: 0, byCollection: {}, hasKeyring: false },
+        checksumStatus: 'absent-legacy',
+        compatible: false,
+      });
+    }
+  };
+
   const doRestore = async () => {
-    if (!restoreFile) return;
+    if (!parsedBackup) return;
     setRestoreErr(undefined);
     setBusy(true);
     try {
-      const parsed = JSON.parse(await restoreFile.text());
-      if (!isValidBackup(parsed)) {
-        setRestoreErr('That file is not a valid Cockpit backup.');
-        return;
-      }
       const db = authService.require();
-      await restoreBackup(db.adapter, parsed);
+      // Dry-run first: verify integrity end-to-end before any write.
+      await restoreBackup(db.adapter, parsedBackup, { dryRun: true });
+      await restoreBackup(db.adapter, parsedBackup);
+      await db.audit('backup', 'backup.restored');
       // The keyring may have changed — force a clean re-authentication.
       await authService.close();
       useDataStore.getState().reset();
-      setRestoreFile(undefined);
+      closeRestore();
       await refresh();
       navigate('/');
     } catch (err) {
@@ -106,6 +139,13 @@ export function AppSettingsScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const closeRestore = () => {
+    setRestoreFile(undefined);
+    setRestoreErr(undefined);
+    setRestorePreview(undefined);
+    setParsedBackup(undefined);
   };
 
   return (
@@ -116,7 +156,7 @@ export function AppSettingsScreen() {
         </button>
         <div className="topbar__brand">Workspace settings</div>
         <div className="topbar__spacer" />
-        <Badge tone="green" icon="shield">Local-only</Badge>
+        <ProcessingStatusBadge />
       </header>
 
       <main className="page stack" style={{ maxWidth: 760 }}>
@@ -201,6 +241,8 @@ export function AppSettingsScreen() {
           </div>
         </Card>
 
+        <DeviceStorageCard />
+
         <AiSettingsCard />
 
         <SemanticRetrievalCard />
@@ -237,7 +279,7 @@ export function AppSettingsScreen() {
                 hidden
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) setRestoreFile(f);
+                  if (f) void previewRestore(f);
                   e.target.value = '';
                 }}
               />
@@ -285,10 +327,59 @@ export function AppSettingsScreen() {
       {restoreFile && (
         <Modal
           narrow
-          title="Replace workspace with backup?"
-          subtitle={`"${restoreFile.name}" will replace every client record currently on this device. You will be asked to unlock with the passphrase that protected the backup.`}
-          onClose={() => { setRestoreFile(undefined); setRestoreErr(undefined); }}
+          title="Restore preview"
+          subtitle={`"${restoreFile.name}" — reviewed before anything is changed. Restore replaces every client record on this device, and you will unlock afterward with the passphrase that protected the backup.`}
+          onClose={closeRestore}
         >
+          {restorePreview && (
+            <div className="stack-sm" style={{ marginBottom: 12 }}>
+              <div className="cluster" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <Badge tone={restorePreview.valid ? 'green' : 'red'} icon={restorePreview.valid ? 'check' : 'alert'}>
+                  {restorePreview.valid ? 'Ready to restore' : 'Cannot restore'}
+                </Badge>
+                <Badge tone="neutral">format v{restorePreview.version}</Badge>
+                <Badge
+                  tone={restorePreview.checksumStatus === 'valid' ? 'green' : restorePreview.checksumStatus === 'mismatch' ? 'red' : 'amber'}
+                  icon="shield"
+                >
+                  {restorePreview.checksumStatus === 'valid'
+                    ? 'Integrity verified'
+                    : restorePreview.checksumStatus === 'mismatch'
+                      ? 'Checksum mismatch'
+                      : 'No checksum (legacy)'}
+                </Badge>
+              </div>
+              <p className="muted small" style={{ margin: 0 }}>
+                {restorePreview.createdAt ? `Created ${fmtDateTime(restorePreview.createdAt)}. ` : ''}
+                {restorePreview.counts.records} record(s), {restorePreview.counts.blobs} attachment(s),{' '}
+                {restorePreview.counts.hasKeyring ? 'keyring present' : 'NO keyring'}.
+              </p>
+              {Object.keys(restorePreview.counts.byCollection).length > 0 && (
+                <details>
+                  <summary className="small" style={{ cursor: 'pointer' }}>Records by collection</summary>
+                  <ul className="small" style={{ margin: '4px 0' }}>
+                    {Object.entries(restorePreview.counts.byCollection)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([collection, n]) => (
+                        <li key={collection}>{collection}: {n}</li>
+                      ))}
+                  </ul>
+                </details>
+              )}
+              {restorePreview.blockers.map((b, i) => (
+                <div key={i} className="notice notice--danger" role="alert">
+                  <Icon name="alert" size={15} />
+                  <span className="small">{b}</span>
+                </div>
+              ))}
+              {restorePreview.warnings.map((w, i) => (
+                <div key={i} className="notice notice--warn">
+                  <Icon name="info" size={15} />
+                  <span className="small">{w}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {restoreErr && (
             <div className="notice notice--danger" role="alert" style={{ marginBottom: 12 }}>
               <Icon name="alert" size={16} />
@@ -296,10 +387,12 @@ export function AppSettingsScreen() {
             </div>
           )}
           <div className="modal__footer">
-            <button className="btn btn--ghost" onClick={() => { setRestoreFile(undefined); setRestoreErr(undefined); }}>
-              Cancel
-            </button>
-            <button className="btn btn--danger" disabled={busy} onClick={() => void doRestore()}>
+            <button className="btn btn--ghost" onClick={closeRestore}>Cancel</button>
+            <button
+              className="btn btn--danger"
+              disabled={busy || !restorePreview?.valid}
+              onClick={() => void doRestore()}
+            >
               Replace workspace
             </button>
           </div>
