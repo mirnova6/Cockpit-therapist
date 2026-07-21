@@ -24,6 +24,16 @@ import {
   generateReadinessReport,
   type ReadinessReport,
 } from '../core/governance/readinessReport';
+import type {
+  PhiGateItem,
+  PolicyDraft,
+  ThreatModelItem,
+} from '../core/governance/phase7Schema';
+import { buildDataFlowMap, type DataFlowMap } from '../core/governance/dataFlowMap';
+import {
+  buildSecurityReviewPacket,
+  type SecurityReviewPacket,
+} from '../core/governance/securityPacket';
 import { useAiStore } from './aiStore';
 
 async function author(): Promise<string> {
@@ -39,6 +49,12 @@ interface GovernanceState {
   operations: AiOperationRecord[];
   feedback: AiFeedbackRecord[];
   report?: ReadinessReport;
+  // Phase 7 governance state
+  threatModel: ThreatModelItem[];
+  policies: PolicyDraft[];
+  phiGate: PhiGateItem[];
+  securityPacket?: SecurityReviewPacket;
+  dataFlowMap?: DataFlowMap;
   runningEval: boolean;
 
   reset: () => void;
@@ -46,6 +62,7 @@ interface GovernanceState {
   loadGovernance: () => Promise<void>;
   loadAudit: (limit?: number) => Promise<void>;
   loadFeedback: () => Promise<void>;
+  loadPhase7: () => Promise<void>;
 
   runEval: (
     caseId: string,
@@ -67,6 +84,17 @@ interface GovernanceState {
   ) => Promise<void>;
   buildReport: () => Promise<ReadinessReport>;
 
+  // Phase 7 actions
+  updateThreatItem: (
+    id: string,
+    patch: Partial<Pick<ThreatModelItem, 'reviewStatus' | 'notes' | 'reviewer' | 'remainingRisk' | 'currentMitigation' | 'requiredActionBeforeUse'>>,
+  ) => Promise<void>;
+  updatePolicy: (id: string, patch: Partial<Pick<PolicyDraft, 'body' | 'status' | 'reviewer'>>) => Promise<void>;
+  resetPolicy: (id: string) => Promise<void>;
+  setPhiGateItem: (id: string, patch: { complete: boolean; completedBy?: string; notes?: string }) => Promise<void>;
+  buildSecurityPacket: () => Promise<SecurityReviewPacket>;
+  buildDataFlow: () => DataFlowMap;
+
   generateEmbeddings: (clientId: string, onlineSendConfirmed?: boolean) => Promise<GenerateEmbeddingsResult>;
   deleteEmbeddings: (clientId: string) => Promise<number>;
   previewSemantic: (
@@ -84,6 +112,9 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
   auditEvents: [],
   operations: [],
   feedback: [],
+  threatModel: [],
+  policies: [],
+  phiGate: [],
   runningEval: false,
 
   reset: () =>
@@ -96,6 +127,11 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
       operations: [],
       feedback: [],
       report: undefined,
+      threatModel: [],
+      policies: [],
+      phiGate: [],
+      securityPacket: undefined,
+      dataFlowMap: undefined,
       runningEval: false,
     }),
 
@@ -191,6 +227,53 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
     const report = await generateReadinessReport(db);
     set({ report });
     return report;
+  },
+
+  loadPhase7: async () => {
+    const db = authService.require();
+    const [threatModel, policies, phiGate] = await Promise.all([
+      db.governance.listThreatModel(),
+      db.governance.listPolicies(),
+      db.governance.listPhiGate(),
+    ]);
+    set({ threatModel, policies, phiGate });
+  },
+
+  updateThreatItem: async (id, patch) => {
+    const db = authService.require();
+    await db.governance.updateThreatItem(id, patch, await author());
+    set({ threatModel: await db.governance.listThreatModel() });
+  },
+
+  updatePolicy: async (id, patch) => {
+    const db = authService.require();
+    await db.governance.updatePolicy(id, patch, await author());
+    set({ policies: await db.governance.listPolicies() });
+  },
+
+  resetPolicy: async (id) => {
+    const db = authService.require();
+    await db.governance.resetPolicy(id, await author());
+    set({ policies: await db.governance.listPolicies() });
+  },
+
+  setPhiGateItem: async (id, patch) => {
+    const db = authService.require();
+    await db.governance.setPhiGateItem(id, patch, await author());
+    set({ phiGate: await db.governance.listPhiGate() });
+  },
+
+  buildSecurityPacket: async () => {
+    const db = authService.require();
+    const securityPacket = await buildSecurityReviewPacket(db);
+    set({ securityPacket });
+    return securityPacket;
+  },
+
+  buildDataFlow: () => {
+    const dataFlowMap = buildDataFlowMap();
+    set({ dataFlowMap });
+    return dataFlowMap;
   },
 
   generateEmbeddings: async (clientId, onlineSendConfirmed) => {

@@ -27,6 +27,12 @@ import { AuditScreen } from '../features/governance/AuditScreen';
 import { FeedbackDashboard } from '../features/governance/FeedbackDashboard';
 import { ProviderRegistryScreen } from '../features/governance/ProviderRegistryScreen';
 import { ReadinessScreen } from '../features/governance/ReadinessScreen';
+import { GovernanceHubScreen } from '../features/governance/GovernanceHubScreen';
+import { PhiGateScreen } from '../features/governance/PhiGateScreen';
+import { ThreatModelScreen } from '../features/governance/ThreatModelScreen';
+import { PolicyDraftsScreen } from '../features/governance/PolicyDraftsScreen';
+import { SecurityPacketScreen } from '../features/governance/SecurityPacketScreen';
+import { DataFlowScreen } from '../features/governance/DataFlowScreen';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
 import { AssistantTab } from '../features/intelligence/AssistantTab';
 import { FormulationTab } from '../features/intelligence/FormulationTab';
@@ -75,6 +81,12 @@ export function App() {
       <Route path="/feedback" element={<FeedbackDashboard />} />
       <Route path="/providers" element={<ProviderRegistryScreen />} />
       <Route path="/readiness" element={<ReadinessScreen />} />
+      <Route path="/governance" element={<GovernanceHubScreen />} />
+      <Route path="/governance/phi-gate" element={<PhiGateScreen />} />
+      <Route path="/governance/threats" element={<ThreatModelScreen />} />
+      <Route path="/governance/policies" element={<PolicyDraftsScreen />} />
+      <Route path="/governance/security-packet" element={<SecurityPacketScreen />} />
+      <Route path="/governance/data-flow" element={<DataFlowScreen />} />
       <Route path="/guides" element={<GuidesScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />

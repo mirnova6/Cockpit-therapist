@@ -11,11 +11,22 @@ import {
   type EmbeddingRecord,
   type ProviderApproval,
 } from './governanceSchema';
+import {
+  PHI_GATE_SEED,
+  POLICY_SEED,
+  THREAT_MODEL_SEED,
+  type PhiGateItem,
+  type PolicyDraft,
+  type ThreatModelItem,
+} from './phase7Schema';
 
 const C = {
   approvals: 'provider-approvals',
   checklist: 'readiness-checklist',
   embeddings: 'embeddings',
+  threats: 'threat-model',
+  policies: 'policy-drafts',
+  phiGate: 'phi-readiness-gate',
 } as const;
 
 export interface GovernanceHost {
@@ -127,6 +138,155 @@ export class GovernanceRepository {
     };
     for (const item of items) byStatus[item.status]++;
     return { total: items.length, byStatus };
+  }
+
+  // ------------------------------------------------ Phase 7: threat model
+
+  /** Returns the threat model, seeding/re-syncing new entries by key. */
+  async listThreatModel(): Promise<ThreatModelItem[]> {
+    const existing = await this.store.getAll<ThreatModelItem>(C.threats);
+    const byKey = new Map(existing.map((t) => [t.key, t]));
+    for (const seed of THREAT_MODEL_SEED) {
+      if (!byKey.has(seed.key)) {
+        const item: ThreatModelItem = { ...seed, id: newId(), reviewStatus: 'not-reviewed', updatedAt: nowIso() };
+        await this.store.put(C.threats, item.id, item);
+        byKey.set(seed.key, item);
+      }
+    }
+    const order = new Map(THREAT_MODEL_SEED.map((s, i) => [s.key, i]));
+    return [...byKey.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+  }
+
+  async updateThreatItem(
+    id: string,
+    patch: Partial<
+      Pick<
+        ThreatModelItem,
+        'reviewStatus' | 'notes' | 'reviewer' | 'remainingRisk' | 'currentMitigation' | 'requiredActionBeforeUse'
+      >
+    >,
+    author: string,
+  ): Promise<ThreatModelItem> {
+    const existing = await this.store.get<ThreatModelItem>(C.threats, id);
+    if (!existing) throw new Error('Threat item not found');
+    const updated: ThreatModelItem = {
+      ...existing,
+      ...patch,
+      reviewedAt: patch.reviewStatus === 'reviewed' ? nowIso().slice(0, 10) : existing.reviewedAt,
+      reviewer: patch.reviewer ?? (patch.reviewStatus === 'reviewed' ? author : existing.reviewer),
+      updatedAt: nowIso(),
+    };
+    await this.store.put(C.threats, id, updated);
+    await this.host.audit('security', 'threat-model.update', `"${existing.threat}" → ${updated.reviewStatus} by ${author}`);
+    return updated;
+  }
+
+  // --------------------------------------------------- Phase 7: policies
+
+  /** Returns policy drafts, seeding/re-syncing new templates by key. */
+  async listPolicies(): Promise<PolicyDraft[]> {
+    const existing = await this.store.getAll<PolicyDraft>(C.policies);
+    const byKey = new Map(existing.map((p) => [p.key, p]));
+    for (const seed of POLICY_SEED) {
+      if (!byKey.has(seed.key)) {
+        const draft: PolicyDraft = { ...seed, id: newId(), status: 'draft', version: 1, updatedAt: nowIso() };
+        await this.store.put(C.policies, draft.id, draft);
+        byKey.set(seed.key, draft);
+      }
+    }
+    const order = new Map(POLICY_SEED.map((s, i) => [s.key, i]));
+    return [...byKey.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+  }
+
+  async updatePolicy(
+    id: string,
+    patch: Partial<Pick<PolicyDraft, 'body' | 'status' | 'reviewer'>>,
+    author: string,
+  ): Promise<PolicyDraft> {
+    const existing = await this.store.get<PolicyDraft>(C.policies, id);
+    if (!existing) throw new Error('Policy draft not found');
+    const bodyChanged = patch.body !== undefined && patch.body !== existing.body;
+    const updated: PolicyDraft = {
+      ...existing,
+      ...patch,
+      version: bodyChanged ? existing.version + 1 : existing.version,
+      reviewedAt:
+        patch.status === 'reviewed-by-counsel' || patch.status === 'adopted' ? nowIso().slice(0, 10) : existing.reviewedAt,
+      updatedAt: nowIso(),
+    };
+    await this.store.put(C.policies, id, updated);
+    await this.host.audit('security', 'policy.update', `"${existing.title}" → ${updated.status} by ${author}`);
+    return updated;
+  }
+
+  /** Restore a policy body to its seeded template (keeps status/reviewer). */
+  async resetPolicy(id: string, author: string): Promise<PolicyDraft> {
+    const existing = await this.store.get<PolicyDraft>(C.policies, id);
+    if (!existing) throw new Error('Policy draft not found');
+    const seed = POLICY_SEED.find((s) => s.key === existing.key);
+    if (!seed) return existing;
+    const updated: PolicyDraft = { ...existing, body: seed.body, version: existing.version + 1, updatedAt: nowIso() };
+    await this.store.put(C.policies, id, updated);
+    await this.host.audit('security', 'policy.reset', `"${existing.title}" by ${author}`);
+    return updated;
+  }
+
+  // ------------------------------------------------- Phase 7: PHI gate
+
+  /** Returns the PHI readiness gate, seeding it. All items start incomplete. */
+  async listPhiGate(): Promise<PhiGateItem[]> {
+    const existing = await this.store.getAll<PhiGateItem>(C.phiGate);
+    const byKey = new Map(existing.map((g) => [g.key, g]));
+    for (const seed of PHI_GATE_SEED) {
+      if (!byKey.has(seed.key)) {
+        const item: PhiGateItem = {
+          id: newId(),
+          key: seed.key,
+          label: seed.label,
+          detail: seed.detail,
+          requiresNamedApproval: seed.requiresNamedApproval,
+          complete: false,
+          updatedAt: nowIso(),
+        };
+        await this.store.put(C.phiGate, item.id, item);
+        byKey.set(seed.key, item);
+      }
+    }
+    const order = new Map(PHI_GATE_SEED.map((s, i) => [s.key, i]));
+    return [...byKey.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+  }
+
+  /**
+   * Set a gate item's completion. This is the ONLY way an item becomes
+   * complete — an explicit manual review action carrying the reviewer's name
+   * for items that require named approval. Nothing derives completion from
+   * client data, so the gate cannot be bypassed by record or prompt content.
+   */
+  async setPhiGateItem(
+    id: string,
+    patch: { complete: boolean; completedBy?: string; notes?: string },
+    author: string,
+  ): Promise<PhiGateItem> {
+    const existing = await this.store.get<PhiGateItem>(C.phiGate, id);
+    if (!existing) throw new Error('Gate item not found');
+    if (patch.complete && existing.requiresNamedApproval && !(patch.completedBy ?? '').trim()) {
+      throw new Error('Final approval requires the named approver.');
+    }
+    const updated: PhiGateItem = {
+      ...existing,
+      complete: patch.complete,
+      completedBy: patch.complete ? (patch.completedBy?.trim() || author) : undefined,
+      completedAt: patch.complete ? nowIso() : undefined,
+      notes: patch.notes ?? existing.notes,
+      updatedAt: nowIso(),
+    };
+    await this.store.put(C.phiGate, id, updated);
+    await this.host.audit(
+      'security',
+      'phi-gate.update',
+      `"${existing.label}" → ${updated.complete ? 'complete' : 'incomplete'} by ${updated.completedBy ?? author}`,
+    );
+    return updated;
   }
 
   // --------------------------------------------------------- embeddings

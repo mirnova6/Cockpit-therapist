@@ -582,6 +582,69 @@ try {
   // Cancel — we don't need to actually replace the workspace here.
   await page.click('.modal button:has-text("Cancel")');
 
+  // Backup & export warnings remain active (Phase 7 test #11).
+  check('restore replace-warning still present', await page.isVisible('text=Replaces everything'));
+
+  // ================================================= Phase 7: HIPAA-conscious governance
+  console.log('Phase 7: readiness dashboard, PHI gate, security packet, data-flow, threat model, policies');
+  await page.goto(`${BASE}/#/governance`);
+  await page.waitForSelector('text=HIPAA-conscious readiness dashboard');
+  check('dashboard shows not-approved-for-PHI posture', await page.isVisible('.badge:has-text("Not approved for real PHI")'));
+  check('dashboard uses HIPAA-conscious (not "compliant") framing', await page.isVisible('text=HIPAA-conscious readiness dashboard'));
+  check('dashboard explicitly disclaims a compliance claim', await page.isVisible('text=requires legal/security review'));
+  check('dashboard links to Real PHI Readiness Gate', await page.isVisible('text=Real PHI Readiness Gate'));
+  await page.screenshot({ path: `${OUT}25-governance-hub.png` });
+
+  // Real PHI readiness gate — blocked by default.
+  await page.goto(`${BASE}/#/governance/phi-gate`);
+  await page.waitForSelector('text=Real PHI Readiness Gate');
+  check('PHI gate blocked by default', await page.isVisible('text=Blocked: not approved for real PHI'));
+  check('final gate item requires named approval', await page.isVisible('text=Final manual approval recorded'));
+  // Mark one item complete through explicit review, confirm it persists as complete.
+  await page.locator('.soft:has-text("Backup/restore verified") button.btn--ghost').first().click();
+  await page.click('button:has-text("Mark complete")');
+  await page.waitForSelector('.soft:has-text("Backup/restore verified") .badge:has-text("Complete")');
+  check('gate item completes only via explicit manual review', true);
+  check('gate still blocked after one item', await page.isVisible('text=Blocked: not approved for real PHI'));
+  await page.screenshot({ path: `${OUT}26-phi-gate.png` });
+
+  // Security review packet — assembled, exportable, no secrets.
+  await page.goto(`${BASE}/#/governance/security-packet`);
+  await page.waitForSelector('text=Security review packet');
+  check('security packet shows encryption model', await page.isVisible('text=Encryption model'));
+  check('security packet shows key management model', await page.isVisible('text=Key management model'));
+  check('security packet shows prompt-injection protections', await page.isVisible('text=Prompt-injection protections'));
+  check('security packet export controls available', await page.isVisible('button:has-text("Export text")'));
+
+  // Data-flow map — encryption + never-plaintext guarantees.
+  await page.goto(`${BASE}/#/governance/data-flow`);
+  await page.waitForSelector('text=Data-flow map');
+  check('data-flow marks client PHI encrypted at rest', await page.isVisible('.badge:has-text("Encrypted at rest: yes")'));
+  check('data-flow documents API keys never exported', await page.isVisible('text=Model API keys'));
+
+  // Threat model — required threats present and reviewable.
+  await page.goto(`${BASE}/#/governance/threats`);
+  await page.waitForSelector('text=Threat model');
+  check('threat model covers lost/stolen device', await page.isVisible('text=Lost or stolen device'));
+  check('threat model covers prompt injection', await page.isVisible('text=Prompt injection'));
+  check('threat model covers clinician overreliance', await page.isVisible('text=Clinician overreliance on AI'));
+
+  // Policy drafts — editable + exportable.
+  await page.goto(`${BASE}/#/governance/policies`);
+  await page.waitForSelector('text=Policy & disclosure drafts');
+  check('incident-response policy draft present', await page.isVisible('text=Incident-response policy'));
+  check('clinical responsibility disclaimer present', await page.isVisible('text=Clinical responsibility disclaimer'));
+  check('consent/disclosure template present', await page.isVisible('text=Client consent / disclosure template'));
+  check('policy export controls available', await page.isVisible('button:has-text("Export all (text)")'));
+  await page.screenshot({ path: `${OUT}27-policies.png` });
+
+  // AI vendor / BAA review — named reviewer + online-PHI gating note.
+  await page.goto(`${BASE}/#/providers`);
+  await page.waitForSelector('text=AI vendor / BAA review');
+  check('vendor review gates online PHI at the gateway', await page.isVisible('text=gateway'));
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('h1:has-text("Choose client")');
+
   // -------------------------- app close + reopen (fresh JS context)
   // Simulates quitting and relaunching the app: a brand-new page has no
   // in-memory state, so everything shown must come from IndexedDB.

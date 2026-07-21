@@ -241,6 +241,19 @@ export function AppSettingsScreen() {
           </div>
         </Card>
 
+        <Card title="Security & HIPAA-conscious readiness" icon="shield">
+          <div className="stack-sm">
+            <p className="muted small" style={{ margin: 0 }}>
+              Readiness dashboard, Real PHI readiness gate, security review packet, data-flow map, threat model,
+              policy & disclosure drafts, and AI vendor/BAA review — prepared for independent legal/security review.
+              Real PHI use is not approved until all required reviews are completed.
+            </p>
+            <button className="btn btn--secondary btn--sm" style={{ alignSelf: 'flex-start' }} onClick={() => navigate('/governance')}>
+              <Icon name="shield" size={14} /> Open readiness dashboard
+            </button>
+          </div>
+        </Card>
+
         <DeviceStorageCard />
 
         <AiSettingsCard />

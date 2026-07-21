@@ -58,6 +58,10 @@ export interface ProviderApproval {
   reviewDueDate?: string;
   /** Reminder date for API key rotation. */
   keyRotationDue?: string;
+  /** Phase 7 vendor/BAA review: when the legal/security review was performed. */
+  reviewDate?: string;
+  /** Phase 7 vendor/BAA review: the named legal/security reviewer. */
+  reviewer?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

@@ -20,6 +20,7 @@ infrastructure, agreements, and legal review.
 | **4 — Clinical intelligence** | ClinicalAIProvider architecture (deterministic / local / secure-online), client-record RAG with debug panel, clinician-managed knowledge base, 20-step Analyze-and-Update pipeline, living case formulations, intervention recommendations, safety & trust strategy, client-specific assistant, unsupported-claim verification, clinician feedback | ✅ **Complete & tested** |
 | **5 — Quality & security** | Fictional-case evaluation harness with quality/risk/hallucination metrics, model comparison, feedback dashboard, audit & AI-operations viewers, provider approval registry with purpose gating, emergency disable switch, per-client local-only override, semantic-retrieval preparation (EmbeddingProvider seam), readiness checklist, exportable production readiness report | ✅ **Complete & tested** |
 | **6 — Packaging & production hardening** | Platform-detection seam, durable file-backed encrypted storage adapter (native), OS-level secure key storage for device unlock (no recovery backdoor), browser→native migration path, backup v2 with SHA-256 integrity + inspect/dry-run/no-partial-restore, in-app guides (packaging, storage, migration, device testing, security review, production blockers, online-proxy plan, PDF-ingestion plan), honest processing-status indicator, local-AI setup guide with real readiness check, Tauri/Capacitor shell skeletons | ✅ **Complete & tested** |
+| **7 — Security, HIPAA-conscious readiness & governance** | HIPAA-conscious readiness dashboard, Real PHI Readiness Gate (default blocked, 15 gates, named final approval), security review packet + data-flow map (no secrets/PHI), threat model (15 threats), editable/exportable policy & disclosure drafts (retention, deletion, backup, incident response, device, AI review, consent template, clinical disclaimer), AI vendor/BAA review with named reviewer gating online PHI at the gateway | ✅ **Complete & tested** |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -322,6 +323,57 @@ metadata and labeled honestly in the UI.
   integration scaffolding, not a built binary; the desktop/mobile store implementations
   are the remaining native work called out in the production blocker list.
 
+## What works in Phase 7
+
+Phase 7 adds **no clinical intelligence**. It prepares the app, documentation, and
+workflows for independent legal/security review **before any real PHI is used**. The
+app never claims to be "HIPAA compliant", "legally approved", "safe for PHI", or
+"ready for clinical deployment" — it is **HIPAA-conscious**, presents **readiness
+checklists**, and states that use **requires legal/security review** and **BAA/vendor
+verification where applicable**.
+
+- **HIPAA-conscious readiness dashboard** (`/governance`) — one hub summarizing live
+  status across the Real PHI gate, threat model, policies, vendor/BAA review, the
+  readiness checklist, and audit logs, with the honest "Not approved for real PHI"
+  posture front and center.
+- **Real PHI Readiness Gate** (`/governance/phi-gate`) — fifteen required gates
+  (native build, durable storage, OS key storage, backup/restore, secure deletion,
+  export review, online-AI approval, BAA/vendor review, security review, legal/HIPAA
+  review, incident-response, data-retention, device security, clinician training, and
+  a **named final manual approval**). All start incomplete, so the default status is
+  **"Blocked: not approved for real PHI."** Items become complete only through explicit
+  manual review; even when every item is done the app says only **"Ready for limited
+  reviewed use according to completed checklist. This is not a legal certification."**
+  The status is computed purely from stored flags and takes no client content, so it
+  cannot be flipped by any record or prompt (verified in tests).
+- **Security review packet** (`/governance/security-packet`) — architecture, encryption,
+  key management, local storage, backup/restore, export behavior, AI modes, local AI,
+  online safeguards, provider registry, audit behavior, risk workflow, client isolation,
+  prompt-injection protections, known limitations, and remaining production blockers.
+  Assembled from static prose plus aggregate counts; contains **no** API keys, endpoints,
+  passphrases, provider names, or client PHI. Exportable as text/JSON.
+- **Data-flow map** (`/governance/data-flow`) — for each kind of data: what is entered,
+  where it is stored, whether it is encrypted, when (if ever) it leaves the device, what
+  requires clinician/provider approval, what appears in exports and audit logs, and what
+  is never stored in plaintext. Schema-level and static — contains no client PHI.
+- **Threat model** (`/governance/threats`) — fifteen threats (lost/stolen device,
+  forgotten passphrase, storage eviction, native/host compromise, accidental PHI export,
+  wrong-client exposure, online-AI misconfiguration, missing BAA, prompt injection,
+  backup exposure, unauthorized access, hallucination, unsupported output, clinician
+  overreliance) each with risk description, current mitigation, remaining risk, required
+  action before real use, and an editable review status. Exportable.
+- **Policy & disclosure drafts** (`/governance/policies`) — editable, versioned,
+  exportable templates: local-only use, online-AI use, data retention, secure deletion,
+  backup & recovery, backup storage, export & records-handling, device security,
+  incident response, breach-response escalation, AI output review, clinical documentation
+  responsibility, a client consent/disclosure template, and a clinical responsibility
+  disclaimer. Each carries a "DRAFT — for legal/security review" header and can be reset
+  to its template.
+- **AI vendor / BAA review** (`/providers`) — the provider approval registry now records
+  the review date and named legal/security reviewer alongside provider, model, endpoint,
+  purposes, BAA/contract status, and approval. The gateway continues to **refuse online
+  PHI** unless the provider is approved, unexpired, and the purpose is allowed.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -346,6 +398,14 @@ metadata and labeled honestly in the UI.
   local-only overrides beat every other setting, embeddings are client-namespaced,
   encrypted, export-excluded, and deleted with the client, and the readiness tooling
   never claims compliance — every artifact carries "requires legal/security review".
+- Phase 7: the Real PHI Readiness Gate defaults to **blocked** and its status is computed
+  only from stored completion flags — never from client content — so injected text cannot
+  flip it; the final gate item requires a named approver; the security review packet and
+  data-flow map are assembled from static prose plus counts and contain no API keys,
+  endpoints, passphrases, provider names, or client PHI (canary tests enforce this); audit
+  logs are re-verified to hold no clinical plaintext after governance activity; and the AI
+  vendor/BAA review keeps the gateway's online-PHI refusal in force. No wording anywhere
+  claims HIPAA compliance, legal approval, or safety for PHI.
 - Phase 6: the native file-backed storage adapter stores only encrypted envelopes (same
   AES-256-GCM records as the browser build — no plaintext on disk); device unlock stores
   a random wrapping key **only** in the OS Keychain/Keystore with **no recovery backdoor**
@@ -385,8 +445,10 @@ src/
     pipeline/              20-step Analyze-and-Update reasoning pipeline
     eval/                  Phase 5 evaluation harness: fictional cases, metrics,
                            trap evaluators, ephemeral sandbox, task runners
-    governance/            provider approval registry, readiness checklist,
-                           production readiness report, embedding records
+    governance/            provider approval registry + vendor/BAA review, readiness
+                           checklist, production readiness report, embedding records,
+                           Phase 7: threat model, policy drafts, Real PHI readiness gate,
+                           security review packet + data-flow map assemblers
     embeddings/            EmbeddingProvider seam + embedding service (semantic
                            retrieval preparation)
     formulation/           10-framework living case-formulation engine + diffing
@@ -402,9 +464,12 @@ src/
                            hypotheses, evidence, extraction, review, documents, goals,
                            intelligence, knowledge, evaluation, governance, guides, settings
   app/                     design system (theme.css), shared components, router
+    features/governance/   Phase 7 screens: readiness dashboard, Real PHI gate, security
+                           packet, data-flow map, threat model, policy drafts
 docs/phase6/               8 offline planning docs (bundled into the app at /guides)
+docs/phase7/               Phase 7 governance overview (readiness materials live in-app)
 native/                    example Tauri + Capacitor configs and command skeletons
-e2e/smoke.mjs              browser-level end-to-end verification (112 checks)
+e2e/smoke.mjs              browser-level end-to-end verification (135 checks)
 ```
 
 Replaceability seams: the storage engine sits behind `StorageAdapter` (the Phase 6
@@ -418,20 +483,22 @@ and AI/RAG components consume the same repositories without touching the UI laye
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 234 unit tests: crypto, auth, repositories, structured data,
+npm test             # 246 unit tests: crypto, auth, repositories, structured data,
                      # extraction rules, assessment scoring, documents, backup,
                      # AI gateway/consent/isolation, RAG, knowledge base, verification,
                      # pipeline, formulation, interventions, assistant, evaluation
                      # harness, governance controls, embeddings, platform detection,
                      # file-backed storage, device unlock (no backdoor), backup v2
-                     # integrity, storage performance + browser→native migration
+                     # integrity, storage performance + browser→native migration,
+                     # Phase 7 PHI-gate / packet / data-flow / policy / threat-model
 npm run typecheck    # strict TS
 npm run build        # production build
-node e2e/smoke.mjs   # 112-check browser E2E: setup → clients → risk review →
+node e2e/smoke.mjs   # 135-check browser E2E: setup → clients → risk review →
                      # extraction → profile → assessments → documents → AI settings →
                      # knowledge → formulation → interventions → assistant →
                      # Analyze-and-Update → evaluation harness → audit/ops viewers →
                      # provider registry → readiness report → device/storage posture →
                      # local-AI guide → guides/checklists → backup restore preview →
-                     # relaunch → encrypted-at-rest check
+                     # HIPAA-conscious governance (PHI gate, packet, data-flow, threats,
+                     # policies, vendor/BAA) → relaunch → encrypted-at-rest check
 ```

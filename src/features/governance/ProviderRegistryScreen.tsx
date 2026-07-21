@@ -31,6 +31,8 @@ interface FormState {
   disallowedPurposes: AiCapability[];
   reviewDueDate: string;
   keyRotationDue: string;
+  reviewDate: string;
+  reviewer: string;
   notes: string;
 }
 
@@ -46,6 +48,8 @@ const EMPTY_FORM: FormState = {
   disallowedPurposes: [],
   reviewDueDate: '',
   keyRotationDue: '',
+  reviewDate: '',
+  reviewer: '',
   notes: '',
 };
 
@@ -82,6 +86,8 @@ export function ProviderRegistryScreen() {
             disallowedPurposes: approval.disallowedPurposes,
             reviewDueDate: approval.reviewDueDate ?? '',
             keyRotationDue: approval.keyRotationDue ?? '',
+            reviewDate: approval.reviewDate ?? '',
+            reviewer: approval.reviewer ?? '',
             notes: approval.notes ?? '',
           }
         : { ...EMPTY_FORM },
@@ -115,6 +121,8 @@ export function ProviderRegistryScreen() {
       disallowedPurposes: form.disallowedPurposes,
       reviewDueDate: form.reviewDueDate || undefined,
       keyRotationDue: form.keyRotationDue || undefined,
+      reviewDate: form.reviewDate || undefined,
+      reviewer: form.reviewer.trim() || undefined,
       notes: form.notes.trim() || undefined,
     });
     setForm(undefined);
@@ -132,12 +140,13 @@ export function ProviderRegistryScreen() {
           </button>
         </div>
 
-        <Card title="Provider approval registry" icon="shield">
+        <Card title="AI vendor / BAA review & provider approval registry" icon="shield">
           <p className="muted small" style={{ margin: 0 }}>
-            Records your approval decisions per provider: BAA/contract status, approved and disallowed uses,
-            review dates, and key-rotation reminders. When an entry exists for an online provider, the gateway
-            ENFORCES it — no PHI is sent unless the entry is approved, unexpired, and the purpose is allowed.
-            API keys are configured under AI settings, never stored here.
+            Records your vendor/BAA review per provider: name, type, model, endpoint, approved and disallowed uses,
+            BAA/contract status, review date, expiration, named legal/security reviewer, and approval status. When an
+            entry exists for an online provider, the gateway ENFORCES it — no PHI is sent unless the entry is approved,
+            unexpired, and the purpose is allowed. This is HIPAA-conscious preparation and requires BAA/vendor
+            verification where applicable; API keys are configured under AI settings and never stored here.
           </p>
         </Card>
 
@@ -192,6 +201,7 @@ export function ProviderRegistryScreen() {
                     : approval.approvedPurposes.map((p) => APPROVAL_PURPOSES.find((x) => x.value === p)?.label).join(', ')}
                   {approval.disallowedPurposes.length > 0 &&
                     ` · Disallowed: ${approval.disallowedPurposes.map((p) => APPROVAL_PURPOSES.find((x) => x.value === p)?.label).join(', ')}`}
+                  {approval.reviewer && ` · Reviewed by ${approval.reviewer}${approval.reviewDate ? ` (${fmtDate(approval.reviewDate)})` : ''}`}
                   {approval.notes && ` · ${approval.notes}`}
                 </p>
               </div>
@@ -274,6 +284,14 @@ export function ProviderRegistryScreen() {
               </Field>
               <Field label="API key rotation reminder">
                 <input className="input" type="date" value={form.keyRotationDue} onChange={(e) => setForm({ ...form, keyRotationDue: e.target.value })} />
+              </Field>
+            </div>
+            <div className="cluster">
+              <Field label="Review date (when the vendor/BAA review was performed)">
+                <input className="input" type="date" value={form.reviewDate} onChange={(e) => setForm({ ...form, reviewDate: e.target.value })} />
+              </Field>
+              <Field label="Legal / security reviewer">
+                <input className="input" value={form.reviewer} onChange={(e) => setForm({ ...form, reviewer: e.target.value })} placeholder="Named reviewer" />
               </Field>
             </div>
             <Field label="Notes">
