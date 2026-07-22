@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
 import { Badge, Card } from '../../app/components/ui';
 import { authService } from '../../core/auth/authService';
-import { platformCapabilities } from '../../core/platform/platform';
+import { platformCapabilities, runtimeEnvironment } from '../../core/platform/platform';
 
 /**
  * Device & storage settings (Phase 6). Shows the honest platform posture and
@@ -13,6 +13,7 @@ import { platformCapabilities } from '../../core/platform/platform';
  */
 export function DeviceStorageCard() {
   const caps = platformCapabilities();
+  const runtime = runtimeEnvironment();
   const [available, setAvailable] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,7 +59,9 @@ export function DeviceStorageCard() {
     <Card title="Device & storage" icon="shield">
       <div className="stack-sm">
         <div className="cluster" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <Badge tone="neutral" icon="settings">{caps.label}</Badge>
+          <Badge tone={runtime.mode === 'browser-development' ? 'amber' : 'blue'} icon="settings">
+            {runtime.label}
+          </Badge>
           <Badge tone={caps.fileSystemStorage ? 'blue' : 'green'} icon="shield">
             {caps.fileSystemStorage ? 'Durable file storage' : 'Browser storage (development)'}
           </Badge>

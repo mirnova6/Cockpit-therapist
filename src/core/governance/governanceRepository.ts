@@ -19,6 +19,11 @@ import {
   type PolicyDraft,
   type ThreatModelItem,
 } from './phase7Schema';
+import {
+  RELEASE_SEED,
+  type ReleaseChecklistItem,
+  type ReleaseStatus,
+} from '../release/releaseSchema';
 
 const C = {
   approvals: 'provider-approvals',
@@ -27,6 +32,7 @@ const C = {
   threats: 'threat-model',
   policies: 'policy-drafts',
   phiGate: 'phi-readiness-gate',
+  release: 'release-checklist',
 } as const;
 
 export interface GovernanceHost {
@@ -286,6 +292,35 @@ export class GovernanceRepository {
       'phi-gate.update',
       `"${existing.label}" → ${updated.complete ? 'complete' : 'incomplete'} by ${updated.completedBy ?? author}`,
     );
+    return updated;
+  }
+
+  // ------------------------------------------------ Phase 8: release checklist
+
+  async listReleaseChecklist(): Promise<ReleaseChecklistItem[]> {
+    const existing = await this.store.getAll<ReleaseChecklistItem>(C.release);
+    const byKey = new Map(existing.map((i) => [i.key, i]));
+    for (const seed of RELEASE_SEED) {
+      if (!byKey.has(seed.key)) {
+        const item: ReleaseChecklistItem = { ...seed, id: newId(), status: 'not-started', updatedAt: nowIso() };
+        await this.store.put(C.release, item.id, item);
+        byKey.set(seed.key, item);
+      }
+    }
+    const order = new Map(RELEASE_SEED.map((s, i) => [s.key, i]));
+    return [...byKey.values()].sort((a, b) => (order.get(a.key) ?? 99) - (order.get(b.key) ?? 99));
+  }
+
+  async updateReleaseItem(
+    id: string,
+    patch: { status?: ReleaseStatus; notes?: string },
+    author: string,
+  ): Promise<ReleaseChecklistItem> {
+    const existing = await this.store.get<ReleaseChecklistItem>(C.release, id);
+    if (!existing) throw new Error('Release item not found');
+    const updated: ReleaseChecklistItem = { ...existing, ...patch, updatedAt: nowIso() };
+    await this.store.put(C.release, id, updated);
+    await this.host.audit('security', 'release.update', `"${existing.label.slice(0, 50)}" → ${updated.status} by ${author}`);
     return updated;
   }
 

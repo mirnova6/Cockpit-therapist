@@ -11,6 +11,8 @@ import securityReview from '../../../docs/phase6/SECURITY_REVIEW.md?raw';
 import productionBlockers from '../../../docs/phase6/PRODUCTION_BLOCKERS.md?raw';
 import onlineProxy from '../../../docs/phase6/ONLINE_PROXY_PLAN.md?raw';
 import pdfIngestion from '../../../docs/phase6/PDF_INGESTION_PLAN.md?raw';
+import phase8Overview from '../../../docs/phase8/README.md?raw';
+import phase8DeviceTesting from '../../../docs/phase8/DEVICE_TESTING.md?raw';
 
 interface Guide {
   id: string;
@@ -28,6 +30,8 @@ const GUIDES: Guide[] = [
   { id: 'blockers', title: 'Production blocker list', summary: 'Gates before fictional / de-identified / PHI use.', body: productionBlockers },
   { id: 'proxy', title: 'Online AI proxy plan (future)', summary: 'How to avoid direct browser→provider PHI.', body: onlineProxy },
   { id: 'pdf', title: 'PDF/document ingestion plan', summary: 'Privacy-respecting local PDF text extraction.', body: pdfIngestion },
+  { id: 'p8', title: 'Beta & native packaging status', summary: 'Phase 8 packaging status, blockers, and beta mode.', body: phase8Overview },
+  { id: 'p8-device', title: 'Real-device testing checklist (Phase 8)', summary: 'Per-platform beta test steps for macOS/Windows/iOS/Android.', body: phase8DeviceTesting },
 ];
 
 export function GuidesScreen() {

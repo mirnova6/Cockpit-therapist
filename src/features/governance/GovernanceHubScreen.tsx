@@ -86,6 +86,12 @@ export function GovernanceHubScreen() {
       status: { tone: checklistReviewed === checklist.length && checklist.length > 0 ? 'green' : 'amber', label: `${checklistReviewed}/${checklist.length} reviewed` },
     },
     {
+      to: '/release',
+      title: 'Release & deployment decision',
+      icon: 'check',
+      summary: 'Release checklist, performance snapshot, and the deployment decision report (default: not real PHI).',
+    },
+    {
       to: '/audit',
       title: 'Audit & AI operations',
       icon: 'list',

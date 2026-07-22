@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { detectPlatform, platformCapabilities } from './platform';
+import { detectPlatform, platformCapabilities, runtimeEnvironment } from './platform';
 import { nativeBindings } from './nativeBridges';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('runtime environment indicator (Phase 8)', () => {
+  it('reports browser-development in a plain browser window', () => {
+    vi.stubGlobal('window', {});
+    const env = runtimeEnvironment();
+    expect(env.mode).toBe('browser-development');
+    expect(env.label).toContain('Browser');
+  });
+
+  it('reports native-desktop for Tauri and never in the browser', () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
+    expect(runtimeEnvironment().mode).toBe('native-desktop');
+  });
+
+  it('reports native-mobile with the OS for Capacitor', () => {
+    vi.stubGlobal('window', { Capacitor: { isNativePlatform: () => true, getPlatform: () => 'ios' } });
+    const env = runtimeEnvironment();
+    expect(env.mode).toBe('native-mobile');
+    expect(env.os).toBe('ios');
+  });
 });
 
 describe('platform detection', () => {

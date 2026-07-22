@@ -26,6 +26,38 @@ export function detectPlatform(): PlatformKind {
   return 'browser';
 }
 
+/**
+ * A precise, honest runtime descriptor for the environment indicator (Phase 8
+ * §2). It never claims a native mode unless the corresponding runtime is
+ * actually present. Desktop OS (macOS/Windows) is not reliably knowable from
+ * JS alone in Tauri without a plugin call, so the desktop label stays generic
+ * until the shell reports it.
+ */
+export interface RuntimeEnvironment {
+  kind: PlatformKind;
+  mode: 'browser-development' | 'native-desktop' | 'native-mobile' | 'test';
+  os?: 'ios' | 'android' | string;
+  label: string;
+}
+
+export function runtimeEnvironment(): RuntimeEnvironment {
+  const kind = detectPlatform();
+  if (kind === 'tauri') {
+    return { kind, mode: 'native-desktop', label: 'Native desktop mode (Tauri)' };
+  }
+  if (kind === 'capacitor') {
+    const os = (window as unknown as CapacitorWindow).Capacitor?.getPlatform?.();
+    return {
+      kind,
+      mode: 'native-mobile',
+      os,
+      label: os ? `Native mobile mode (${os})` : 'Native mobile mode (Capacitor)',
+    };
+  }
+  if (kind === 'test') return { kind, mode: 'test', label: 'Test environment' };
+  return { kind, mode: 'browser-development', label: 'Browser development mode' };
+}
+
 export interface PlatformCapabilities {
   kind: PlatformKind;
   /** Durable file-system storage bridge available (native shells only). */

@@ -3,6 +3,7 @@ import { AuthError, authService, type AuthStatus } from '../core/auth/authServic
 import { useAiStore } from './aiStore';
 import { useDataStore } from './dataStore';
 import { useDocumentsStore } from './documentsStore';
+import { useBetaStore } from './betaStore';
 import { useGovernanceStore } from './governanceStore';
 import { useIntelligenceStore } from './intelligenceStore';
 import { useStructuredStore } from './structuredStore';
@@ -88,6 +89,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     useDocumentsStore.getState().reset();
     useIntelligenceStore.getState().reset();
     useGovernanceStore.getState().reset();
+    useBetaStore.getState().reset();
     set({ status: 'locked', error: undefined });
   },
 

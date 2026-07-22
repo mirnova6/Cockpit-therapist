@@ -34,6 +34,11 @@ import {
   buildSecurityReviewPacket,
   type SecurityReviewPacket,
 } from '../core/governance/securityPacket';
+import type { ReleaseChecklistItem, ReleaseStatus } from '../core/release/releaseSchema';
+import {
+  generateDeploymentReport,
+  type DeploymentReport,
+} from '../core/release/deploymentReport';
 import { useAiStore } from './aiStore';
 
 async function author(): Promise<string> {
@@ -55,6 +60,9 @@ interface GovernanceState {
   phiGate: PhiGateItem[];
   securityPacket?: SecurityReviewPacket;
   dataFlowMap?: DataFlowMap;
+  // Phase 8 release + deployment
+  releaseChecklist: ReleaseChecklistItem[];
+  deploymentReport?: DeploymentReport;
   runningEval: boolean;
 
   reset: () => void;
@@ -95,6 +103,11 @@ interface GovernanceState {
   buildSecurityPacket: () => Promise<SecurityReviewPacket>;
   buildDataFlow: () => DataFlowMap;
 
+  // Phase 8 actions
+  loadRelease: () => Promise<void>;
+  updateReleaseItem: (id: string, patch: { status?: ReleaseStatus; notes?: string }) => Promise<void>;
+  buildDeploymentReport: () => Promise<DeploymentReport>;
+
   generateEmbeddings: (clientId: string, onlineSendConfirmed?: boolean) => Promise<GenerateEmbeddingsResult>;
   deleteEmbeddings: (clientId: string) => Promise<number>;
   previewSemantic: (
@@ -115,6 +128,7 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
   threatModel: [],
   policies: [],
   phiGate: [],
+  releaseChecklist: [],
   runningEval: false,
 
   reset: () =>
@@ -132,6 +146,8 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
       phiGate: [],
       securityPacket: undefined,
       dataFlowMap: undefined,
+      releaseChecklist: [],
+      deploymentReport: undefined,
       runningEval: false,
     }),
 
@@ -299,5 +315,23 @@ export const useGovernanceStore = create<GovernanceState>((set, get) => ({
       lexicalPreviewSearch(db, clientId, query),
     ]);
     return { semantic, lexical };
+  },
+
+  loadRelease: async () => {
+    const db = authService.require();
+    set({ releaseChecklist: await db.governance.listReleaseChecklist() });
+  },
+
+  updateReleaseItem: async (id, patch) => {
+    const db = authService.require();
+    await db.governance.updateReleaseItem(id, patch, await author());
+    set({ releaseChecklist: await db.governance.listReleaseChecklist() });
+  },
+
+  buildDeploymentReport: async () => {
+    const db = authService.require();
+    const deploymentReport = await generateDeploymentReport(db);
+    set({ deploymentReport });
+    return deploymentReport;
   },
 }));

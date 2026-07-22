@@ -642,6 +642,64 @@ try {
   await page.goto(`${BASE}/#/providers`);
   await page.waitForSelector('text=AI vendor / BAA review');
   check('vendor review gates online PHI at the gateway', await page.isVisible('text=gateway'));
+
+  // ================================================= Phase 8: beta, release, deployment
+  console.log('Phase 8: beta mode, bug reporting, release & deployment');
+
+  // Runtime environment indicator is honest (browser development mode).
+  await page.goto(`${BASE}/#/settings`);
+  await page.waitForSelector('text=Device & storage');
+  check('runtime indicator shows browser development mode', await page.isVisible('.badge:has-text("Browser development mode")'));
+
+  // Beta testing mode — banner text, sample data, guided checklist.
+  await page.goto(`${BASE}/#/beta`);
+  await page.waitForSelector('text=Beta testing mode');
+  await page.click('button:has-text("Turn on beta mode")');
+  await page.waitForSelector('text=use fictional or fully de-identified data only');
+  check('beta banner blocks real-PHI language', await page.isVisible('text=Real PHI remains blocked'));
+  await page.click('button:has-text("Load sample fictional data")');
+  await page.waitForSelector('text=Loaded');
+  check('sample data loaded confirmation', await page.isVisible('text=fictional client'));
+  await page.click('button:has-text("Show checklist")');
+  check('guided testing checklist present', await page.isVisible('text=First-run setup'));
+
+  // Bug report — cannot submit without the no-PHI confirmation.
+  await page.click('button:has-text("New bug report")');
+  await page.waitForSelector('.modal:has-text("New bug report")');
+  await page.fill('.modal input', 'Client dashboard');
+  await page.fill('.modal textarea >> nth=2', 'It crashed');
+  await page.click('.modal button:has-text("Submit report")');
+  check('bug report blocked without no-PHI confirmation', await page.isVisible('text=confirm the report contains no PHI'));
+  await page.click('.modal label:has-text("no PHI") input[type="checkbox"]');
+  await page.click('.modal button:has-text("Submit report")');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  check('bug report saved after no-PHI confirmation', await page.isVisible('text=Client dashboard'));
+  await page.screenshot({ path: `${OUT}28-beta-mode.png` });
+
+  // Global beta banner shows on other screens once enabled.
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('h1:has-text("Choose client")');
+  check('global beta banner visible while beta mode on', await page.isVisible('.beta-banner'));
+  check('sample fictional clients appear', await page.isVisible('text=Riverbend'));
+
+  // Release & deployment — checklist, classification, report.
+  await page.goto(`${BASE}/#/release`);
+  await page.waitForSelector('text=Release checklist');
+  await page.waitForSelector('text=Ready for fictional-data beta'); // deployment report assembled
+  check('release checklist has platform builds', await page.isVisible('text=Platform builds'));
+  check('deployment classification defaults to fictional-data beta', await page.isVisible('text=Ready for fictional-data beta'));
+  check('deployment report states PHI gate blocked', await page.isVisible('text=Real PHI gate blocked: true'));
+  check('deployment report makes no compliance claim', await page.isVisible('text=makes no compliance claim'));
+  await page.click('button:has-text("Measure performance")');
+  await page.waitForSelector('text=List all clients');
+  check('performance snapshot produces live timings', await page.isVisible('text=ms'));
+  await page.screenshot({ path: `${OUT}29-release-deployment.png` });
+
+  // Turn beta mode back off so relaunch checks run against a clean banner state.
+  await page.goto(`${BASE}/#/beta`);
+  await page.waitForSelector('text=Beta testing mode');
+  await page.click('button:has-text("Turn off beta mode")');
+
   await page.goto(`${BASE}/#/`);
   await page.waitForSelector('h1:has-text("Choose client")');
 

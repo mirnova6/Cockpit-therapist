@@ -254,6 +254,23 @@ export function AppSettingsScreen() {
           </div>
         </Card>
 
+        <Card title="Beta testing & release" icon="activity">
+          <div className="stack-sm">
+            <p className="muted small" style={{ margin: 0 }}>
+              Beta testing mode (fictional / de-identified data only), PHI-free bug reporting, the release checklist, and
+              the deployment decision report. Real PHI stays blocked by the Real PHI Readiness Gate.
+            </p>
+            <div className="cluster">
+              <button className="btn btn--secondary btn--sm" onClick={() => navigate('/beta')}>
+                <Icon name="activity" size={14} /> Beta testing mode
+              </button>
+              <button className="btn btn--secondary btn--sm" onClick={() => navigate('/release')}>
+                <Icon name="check" size={14} /> Release & deployment
+              </button>
+            </div>
+          </div>
+        </Card>
+
         <DeviceStorageCard />
 
         <AiSettingsCard />

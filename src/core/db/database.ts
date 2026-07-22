@@ -3,6 +3,7 @@
  * One instance exists per unlocked session; locking discards it.
  */
 import { AiRepository } from '../ai/aiRepository';
+import { BetaRepository } from '../beta/betaRepository';
 import { EvalRepository } from '../eval/evalRepository';
 import { GovernanceRepository } from '../governance/governanceRepository';
 import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
@@ -61,6 +62,8 @@ export class ClinicalDatabase {
   readonly evaluation: EvalRepository;
   /** Phase 5 governance: provider approvals, readiness checklist, embeddings. */
   readonly governance: GovernanceRepository;
+  /** Phase 8 beta testing: mode state, guided checklist, PHI-free bug reports. */
+  readonly beta: BetaRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
@@ -88,6 +91,10 @@ export class ClinicalDatabase {
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
     this.governance = new GovernanceRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.beta = new BetaRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });

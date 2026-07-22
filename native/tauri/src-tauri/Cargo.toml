@@ -1,0 +1,26 @@
+[package]
+name = "cockpit"
+version = "0.8.0"
+description = "Cockpit — local-first therapist clinical workspace"
+authors = ["Cockpit"]
+edition = "2021"
+rust-version = "1.77"
+
+# NOTE: This is a real, complete Tauri 2 project. It is NOT compiled in the
+# web CI (no Rust toolchain in that environment). Producing signed desktop
+# binaries requires running `npm run tauri build` on macOS and Windows with
+# the platform toolchains + signing certificates — see native/README.md for
+# the exact, honest list of blockers. Nothing here is simulated as "built".
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-os = "2"
+keyring = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

@@ -33,6 +33,10 @@ import { ThreatModelScreen } from '../features/governance/ThreatModelScreen';
 import { PolicyDraftsScreen } from '../features/governance/PolicyDraftsScreen';
 import { SecurityPacketScreen } from '../features/governance/SecurityPacketScreen';
 import { DataFlowScreen } from '../features/governance/DataFlowScreen';
+import { BetaModeScreen } from '../features/beta/BetaModeScreen';
+import { ReleaseScreen } from '../features/release/ReleaseScreen';
+import { BetaBanner } from './components/BetaBanner';
+import { useBetaStore } from '../state/betaStore';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
 import { AssistantTab } from '../features/intelligence/AssistantTab';
 import { FormulationTab } from '../features/intelligence/FormulationTab';
@@ -50,10 +54,16 @@ import { useAuthStore } from '../state/authStore';
 export function App() {
   const status = useAuthStore((s) => s.status);
   const refresh = useAuthStore((s) => s.refresh);
+  const loadBeta = useBetaStore((s) => s.load);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Load beta state once unlocked so the global banner reflects reality.
+  useEffect(() => {
+    if (status === 'unlocked') void loadBeta();
+  }, [status, loadBeta]);
 
   useAutoLock();
 
@@ -69,7 +79,9 @@ export function App() {
   if (status === 'locked') return <LockScreen />;
 
   return (
-    <Routes>
+    <>
+      <BetaBanner />
+      <Routes>
       <Route path="/" element={<ChooseClientScreen />} />
       <Route path="/settings" element={<AppSettingsScreen />} />
       <Route path="/review" element={<GlobalReviewScreen />} />
@@ -87,6 +99,8 @@ export function App() {
       <Route path="/governance/policies" element={<PolicyDraftsScreen />} />
       <Route path="/governance/security-packet" element={<SecurityPacketScreen />} />
       <Route path="/governance/data-flow" element={<DataFlowScreen />} />
+      <Route path="/release" element={<ReleaseScreen />} />
+      <Route path="/beta" element={<BetaModeScreen />} />
       <Route path="/guides" element={<GuidesScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />
@@ -115,7 +129,8 @@ export function App() {
         <Route path="settings" element={<ClientSettingsTab />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

@@ -21,6 +21,7 @@ infrastructure, agreements, and legal review.
 | **5 — Quality & security** | Fictional-case evaluation harness with quality/risk/hallucination metrics, model comparison, feedback dashboard, audit & AI-operations viewers, provider approval registry with purpose gating, emergency disable switch, per-client local-only override, semantic-retrieval preparation (EmbeddingProvider seam), readiness checklist, exportable production readiness report | ✅ **Complete & tested** |
 | **6 — Packaging & production hardening** | Platform-detection seam, durable file-backed encrypted storage adapter (native), OS-level secure key storage for device unlock (no recovery backdoor), browser→native migration path, backup v2 with SHA-256 integrity + inspect/dry-run/no-partial-restore, in-app guides (packaging, storage, migration, device testing, security review, production blockers, online-proxy plan, PDF-ingestion plan), honest processing-status indicator, local-AI setup guide with real readiness check, Tauri/Capacitor shell skeletons | ✅ **Complete & tested** |
 | **7 — Security, HIPAA-conscious readiness & governance** | HIPAA-conscious readiness dashboard, Real PHI Readiness Gate (default blocked, 15 gates, named final approval), security review packet + data-flow map (no secrets/PHI), threat model (15 threats), editable/exportable policy & disclosure drafts (retention, deletion, backup, incident response, device, AI review, consent template, clinical disclaimer), AI vendor/BAA review with named reviewer gating online PHI at the gateway | ✅ **Complete & tested** |
+| **8 — Beta, native packaging execution & deployment prep** | Real Tauri desktop project + Capacitor mobile config (code/config complete, build blockers documented), completed web-side FileStore/keystore bridges, honest runtime-environment indicator, Beta Testing Mode (banner, sample fictional workspace, guided checklist, PHI-free bug reporting, feedback, exportable beta report), release checklist, deployment decision report (defaults to fictional-data beta), performance/stress suite | ✅ **Complete & tested (native binaries pending toolchain)** |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -374,6 +375,47 @@ verification where applicable**.
   purposes, BAA/contract status, and approval. The gateway continues to **refuse online
   PHI** unless the provider is approved, unexpired, and the purpose is allowed.
 
+## What works in Phase 8
+
+Phase 8 moves the app toward a real packaged beta for **fictional or fully
+de-identified data only**. It adds no new clinical intelligence, preserves every
+Phase 1–7 protection, and does **not** bypass the Real PHI Readiness Gate or claim
+HIPAA compliance. The parts that need real toolchains/devices (signed binaries,
+on-device runs) are code/config-complete with **exact blockers documented** —
+never simulated as working.
+
+- **Native desktop project (Tauri 2)** — a real, buildable project under
+  `native/tauri/` (`Cargo.toml`, `tauri.conf.json`, `src/main.rs` implementing the
+  file-store, keychain, and OS commands, `capabilities/default.json`). Everything it
+  writes is AES-GCM ciphertext; a path guard confines storage to the app-private
+  tree. Producing signed `.dmg`/`.msi` requires the Rust toolchain on macOS **and**
+  Windows plus signing certificates — see `native/README.md`.
+- **Native mobile config (Capacitor)** — a real `capacitor.config.ts` and the
+  completed web-side bridges: the Capacitor `FileStore` (Directory.Data) is now bound
+  alongside the keystore. Installable iOS/Android apps require Xcode / Android SDK and
+  signing identities (blockers documented).
+- **Honest runtime-environment indicator** — `runtimeEnvironment()` reports
+  browser-development / native-desktop / native-mobile (with OS) and is surfaced in
+  Device & storage settings. It never claims a native mode that isn't actually present.
+- **Beta Testing Mode** (`/beta`) — a global banner ("use fictional or fully
+  de-identified data only … real PHI remains blocked until the Real PHI Readiness
+  Gate is completed and reviewed"), a one-click **sample fictional workspace** (three
+  clearly-`[FICTIONAL]` clients with transcripts, assessments, and a risk scenario), a
+  guided testing checklist, feedback, and an exportable beta test report.
+- **PHI-free bug reporting** — a structured form (version, platform, screen, issue
+  type, steps, expected/actual, severity, optional screenshot filename) that captures
+  **no** client records, notes, transcripts, prompts, API keys, or exports, requires an
+  explicit "I confirm this report contains no PHI" checkbox, and scrubs secret-shaped
+  tokens as defense in depth.
+- **Release checklist & deployment decision report** (`/release`) — human-tracked
+  release items (platform builds, reviews, device/beta testing) plus a live
+  classification that **defaults to "Ready for fictional-data beta"** and never to
+  real-PHI readiness; it states plainly whether online PHI is approved, whether the PHI
+  gate is blocked, and whether native builds are ready, and it makes no compliance claim.
+- **Performance & stress testing** — automated coverage for a 50-client workspace,
+  large transcripts, and native-mode backup/restore with a large workspace, plus a live
+  performance snapshot on the current workspace.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -398,6 +440,15 @@ verification where applicable**.
   local-only overrides beat every other setting, embeddings are client-namespaced,
   encrypted, export-excluded, and deleted with the client, and the readiness tooling
   never claims compliance — every artifact carries "requires legal/security review".
+- Phase 8: the native file-backed adapter (desktop + mobile) writes only encrypted
+  envelopes with a path guard confining storage to the app-private tree; the runtime
+  indicator never claims a native mode that isn't present; **beta mode does not unlock
+  PHI** (the Real PHI Readiness Gate stays authoritative and blocked by default); bug
+  reports capture structured fields only, require a "no PHI" confirmation, and are
+  verified by tests to exclude client data even when clients with PHI exist; the
+  deployment decision report defaults to fictional-data beta and never to real-PHI
+  readiness; and no Phase 8 feature is simulated as working — unbuilt native binaries
+  are reported as blockers, not successes.
 - Phase 7: the Real PHI Readiness Gate defaults to **blocked** and its status is computed
   only from stored completion flags — never from client content — so injected text cannot
   flip it; the final gate item requires a named approver; the security review packet and
@@ -448,7 +499,13 @@ src/
     governance/            provider approval registry + vendor/BAA review, readiness
                            checklist, production readiness report, embedding records,
                            Phase 7: threat model, policy drafts, Real PHI readiness gate,
-                           security review packet + data-flow map assemblers
+                           security review packet + data-flow map assemblers; Phase 8
+                           release checklist persistence
+    beta/                  Phase 8 beta mode: state, sample fictional data, guided
+                           checklist, PHI-free bug reports, feedback, beta report
+    release/               Phase 8 build metadata, release checklist schema,
+                           deployment decision report
+    perf/                  Phase 8 performance harness + stress helpers
     embeddings/            EmbeddingProvider seam + embedding service (semantic
                            retrieval preparation)
     formulation/           10-framework living case-formulation engine + diffing
@@ -466,10 +523,14 @@ src/
   app/                     design system (theme.css), shared components, router
     features/governance/   Phase 7 screens: readiness dashboard, Real PHI gate, security
                            packet, data-flow map, threat model, policy drafts
+    features/beta/         Phase 8 beta testing mode screen
+    features/release/      Phase 8 release checklist + deployment decision screen
 docs/phase6/               8 offline planning docs (bundled into the app at /guides)
 docs/phase7/               Phase 7 governance overview (readiness materials live in-app)
-native/                    example Tauri + Capacitor configs and command skeletons
-e2e/smoke.mjs              browser-level end-to-end verification (135 checks)
+docs/phase8/               Phase 8 overview + real-device testing checklist (in /guides)
+native/tauri/              real Tauri 2 desktop project (src-tauri: Cargo, conf, main.rs)
+native/capacitor/          real Capacitor mobile config
+e2e/smoke.mjs              browser-level end-to-end verification (148 checks)
 ```
 
 Replaceability seams: the storage engine sits behind `StorageAdapter` (the Phase 6
@@ -483,14 +544,16 @@ and AI/RAG components consume the same repositories without touching the UI laye
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 246 unit tests: crypto, auth, repositories, structured data,
+npm test             # 266 unit tests: crypto, auth, repositories, structured data,
                      # extraction rules, assessment scoring, documents, backup,
                      # AI gateway/consent/isolation, RAG, knowledge base, verification,
                      # pipeline, formulation, interventions, assistant, evaluation
                      # harness, governance controls, embeddings, platform detection,
                      # file-backed storage, device unlock (no backdoor), backup v2
                      # integrity, storage performance + browser→native migration,
-                     # Phase 7 PHI-gate / packet / data-flow / policy / threat-model
+                     # Phase 7 PHI-gate / packet / data-flow / policy / threat-model,
+                     # Phase 8 beta mode / PHI-free bug reports / release + deployment /
+                     # 50-client stress / native-mode backup-restore / runtime indicator
 npm run typecheck    # strict TS
 npm run build        # production build
 node e2e/smoke.mjs   # 135-check browser E2E: setup → clients → risk review →

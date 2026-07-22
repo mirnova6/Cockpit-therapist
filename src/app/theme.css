@@ -365,6 +365,21 @@ a:hover { text-decoration: underline; }
 .notice--warn { background: var(--amber-soft); color: var(--amber); }
 .notice--danger { background: var(--red-soft); color: var(--red); }
 
+/* -------------------------------------------------------- beta banner */
+.beta-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--amber);
+}
+.beta-banner span { flex: 1; }
+.beta-banner__link { color: var(--amber); text-decoration: underline; white-space: nowrap; }
+
 /* ------------------------------------------------- client dashboard */
 
 .dash {

@@ -1,0 +1,15 @@
+{
+  "name": "cockpit-tauri",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Tauri desktop shell for Cockpit. Run these from native/tauri/.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  },
+  "//": "Prereqs: Rust toolchain + platform build tools (Xcode CLT on macOS, MSVC Build Tools on Windows). Signing certificates are required for distributable builds. See native/README.md for the exact blocker list. The old *.example files were promoted to the real src-tauri/ project in Phase 8."
+}

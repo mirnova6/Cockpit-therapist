@@ -56,10 +56,18 @@ export function tauriKeyStore(): SecureKeyStore {
 
 // --------------------------------------------------------- Capacitor
 
+interface CapacitorFilesystem {
+  readFile?: (o: { path: string; directory?: string; encoding?: string }) => Promise<{ data: string }>;
+  writeFile?: (o: { path: string; data: string; directory?: string; encoding?: string; recursive?: boolean }) => Promise<unknown>;
+  deleteFile?: (o: { path: string; directory?: string }) => Promise<void>;
+  readdir?: (o: { path: string; directory?: string }) => Promise<{ files: Array<{ name: string } | string> }>;
+  mkdir?: (o: { path: string; directory?: string; recursive?: boolean }) => Promise<unknown>;
+}
+
 interface CapacitorWindow {
   Capacitor?: {
     Plugins?: {
-      Filesystem?: unknown;
+      Filesystem?: CapacitorFilesystem;
       SecureStorage?: {
         get?: (o: { key: string }) => Promise<{ value: string | null }>;
         set?: (o: { key: string; value: string }) => Promise<void>;
@@ -84,6 +92,47 @@ export function capacitorKeyStore(): SecureKeyStore {
   };
 }
 
+/**
+ * FileStore backed by the Capacitor Filesystem plugin (Directory.Data). Stores
+ * one UTF-8 JSON file per record/blob/meta, exactly like the desktop bridge —
+ * the bytes on disk are the same encrypted envelopes. Exercised on-device only;
+ * the FileStore CONTRACT is verified headlessly via MemoryFileStore tests.
+ */
+export function capacitorFileStore(): FileStore {
+  const fs = (window as unknown as CapacitorWindow).Capacitor?.Plugins?.Filesystem;
+  if (!fs?.readFile || !fs.writeFile || !fs.deleteFile || !fs.readdir) {
+    throw new Error('Capacitor Filesystem plugin is not available.');
+  }
+  const directory = 'DATA';
+  return {
+    read: async (path) => {
+      try {
+        return (await fs.readFile!({ path, directory, encoding: 'utf8' })).data;
+      } catch {
+        return undefined; // not found
+      }
+    },
+    write: async (path, content) => {
+      await fs.writeFile!({ path, data: content, directory, encoding: 'utf8', recursive: true });
+    },
+    remove: async (path) => {
+      try {
+        await fs.deleteFile!({ path, directory });
+      } catch {
+        /* already absent */
+      }
+    },
+    list: async (dirPrefix) => {
+      try {
+        const res = await fs.readdir!({ path: dirPrefix, directory });
+        return res.files.map((f) => `${dirPrefix}/${typeof f === 'string' ? f : f.name}`);
+      } catch {
+        return [];
+      }
+    },
+  };
+}
+
 // --------------------------------------------------- bootstrap selection
 
 export interface NativeBindings {
@@ -101,10 +150,22 @@ export function nativeBindings(): NativeBindings {
   try {
     if (kind === 'tauri') return { fileStore: tauriFileStore(), keyStore: tauriKeyStore() };
     if (kind === 'capacitor') {
-      // Filesystem plugin wiring is shell-specific; the keystore is the
-      // security-critical piece and is bound here. A Capacitor FileStore is
-      // added when the mobile shell is built (see native/capacitor).
-      return { keyStore: capacitorKeyStore() };
+      // Bind both the durable FileStore and the OS keystore. Each guard throws
+      // if its plugin is absent, so a partially-configured shell degrades to
+      // browser defaults rather than pretending a capability exists.
+      let fileStore: FileStore | undefined;
+      let keyStore: SecureKeyStore | undefined;
+      try {
+        fileStore = capacitorFileStore();
+      } catch {
+        fileStore = undefined;
+      }
+      try {
+        keyStore = capacitorKeyStore();
+      } catch {
+        keyStore = undefined;
+      }
+      return { fileStore, keyStore };
     }
   } catch {
     // Native API not actually present — fall back to browser defaults rather

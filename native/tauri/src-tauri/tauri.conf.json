@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Cockpit",
+  "version": "0.8.0",
+  "identifier": "app.cockpit.therapist",
+  "build": {
+    "frontendDist": "../../../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm --prefix ../../.. run build",
+    "beforeDevCommand": "npm --prefix ../../.. run dev"
+  },
+  "app": {
+    "windows": [
+      { "title": "Cockpit", "width": 1280, "height": 860, "minWidth": 390, "minHeight": 600 }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://api.anthropic.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app", "msi", "nsis"],
+    "category": "Medical",
+    "shortDescription": "Local-first therapist clinical workspace",
+    "longDescription": "Cockpit is a local-first, encrypted therapist clinical workspace. Beta builds are for fictional or fully de-identified data only; real PHI remains blocked until the Real PHI Readiness Gate is completed and reviewed.",
+    "macOS": { "minimumSystemVersion": "12.0" },
+    "windows": {}
+  }
+}
