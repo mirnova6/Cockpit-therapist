@@ -7,6 +7,7 @@ import { BetaRepository } from '../beta/betaRepository';
 import { EvalRepository } from '../eval/evalRepository';
 import { GovernanceRepository } from '../governance/governanceRepository';
 import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
+import { OrgRepository } from '../org/orgService';
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
 import { DocumentsRepository } from './documentsRepository';
@@ -64,6 +65,8 @@ export class ClinicalDatabase {
   readonly governance: GovernanceRepository;
   /** Phase 8 beta testing: mode state, guided checklist, PHI-free bug reports. */
   readonly beta: BetaRepository;
+  /** Phase 9 organizations, workspaces, users, memberships, supervision. */
+  readonly org: OrgRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
@@ -95,6 +98,10 @@ export class ClinicalDatabase {
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
     this.beta = new BetaRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.org = new OrgRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
