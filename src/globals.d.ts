@@ -9,8 +9,21 @@ declare const __BUILD_DATE__: string | undefined;
 // this project does not depend on @types/node).
 declare module 'node:child_process' {
   export function execSync(command: string, options?: { stdio?: unknown }): { toString(): string };
+  export function execFileSync(
+    file: string,
+    args?: readonly string[],
+    options?: { cwd?: string; encoding?: string; stdio?: unknown },
+  ): string;
 }
 declare module 'node:fs' {
   export function readFileSync(path: unknown, encoding: string): string;
   export function readFileSync(path: unknown): Uint8Array;
+  export function writeFileSync(path: unknown, data: string): void;
+  export function mkdtempSync(prefix: string): string;
+}
+declare module 'node:os' {
+  export function tmpdir(): string;
+}
+declare module 'node:path' {
+  export function join(...parts: string[]): string;
 }

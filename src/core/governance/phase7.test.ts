@@ -16,7 +16,7 @@ let db: ClinicalDatabase;
 
 // A PHI canary and a secret canary we can search for in generated artifacts.
 const PHI_CANARY = 'Zebediah Quintwell-Fauxman';
-const KEY_CANARY = 'sk-ant-SECRET-KEY-CANARY-9999';
+const KEY_CANARY = 'sk-ant-SECRET-KEY-CANARY-9999'; // secret-scan-allow: fixture value, not a real secret
 
 beforeEach(async () => {
   ({ auth, db } = await makeTestDb('test-p7'));

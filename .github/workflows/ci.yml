@@ -1,0 +1,94 @@
+# Cockpit CI (Phase 9 §17)
+#
+# Fictional/de-identified test data ONLY. No provider API keys and no clinical
+# data are used anywhere in this workflow.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Unit, typecheck, build, E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        # Includes encryption/ciphertext checks, cross-client and
+        # cross-organization isolation tests, and RBAC enforcement tests.
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium for E2E
+        run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '0'
+
+      - name: E2E (dynamic port per run)
+        run: npm run test:e2e
+
+      - name: Verify build artifact exists
+        run: test -f dist/index.html && test -d dist/assets
+
+  stability:
+    name: Repeated E2E stability (release candidates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Release-candidate gate: repeated E2E is slow, so it runs on main and tags.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: 20 consecutive E2E runs
+        run: npm run test:e2e:repeat
+
+  audit:
+    name: Dependency audit and secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      - name: Dependency audit (high and above)
+        run: npm audit --audit-level=high
+
+      - name: Secret scan
+        # Fails the build if anything key-shaped is committed.
+        run: node scripts/scan-secrets.mjs

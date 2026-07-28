@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node e2e/smoke.mjs",
-    "test:e2e:repeat": "node e2e/repeat.mjs 20"
+    "test:e2e:repeat": "node e2e/repeat.mjs 20",
+    "scan:secrets": "node scripts/scan-secrets.mjs"
   },
   "dependencies": {
     "idb": "^8.0.0",

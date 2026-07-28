@@ -228,7 +228,7 @@ describe('backupService', () => {
       },
       'Dr. Osei',
     );
-    await sourceDb.ai.saveSettings({ onlineApiKey: 'sk-ant-backup-secret', onlineEnabled: false });
+    await sourceDb.ai.saveSettings({ onlineApiKey: 'sk-ant-backup-secret', onlineEnabled: false }); // secret-scan-allow: fixture value, not a real secret
     const knowledge = await sourceDb.knowledge.createSource(
       {
         title: 'MI Manual',

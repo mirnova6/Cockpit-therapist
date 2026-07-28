@@ -261,13 +261,13 @@ describe('send preview', () => {
 
 describe('encryption at rest', () => {
   it('the stored API key and AI settings are not plaintext in IndexedDB', async () => {
-    await db.ai.saveSettings({ onlineApiKey: 'sk-ant-super-secret-key-123', onlineEnabled: false });
+    await db.ai.saveSettings({ onlineApiKey: 'sk-ant-super-secret-key-123', onlineEnabled: false }); // secret-scan-allow: fixture value, not a real secret
     const rows = await db.adapter.getAllRecords();
     const dump = JSON.stringify(rows);
-    expect(dump).not.toContain('sk-ant-super-secret-key-123');
+    expect(dump).not.toContain('sk-ant-super-secret-key-123'); // secret-scan-allow: fixture value, not a real secret
     // But it decrypts correctly through the repository.
     const settings = await db.ai.getSettings();
-    expect(settings.onlineApiKey).toBe('sk-ant-super-secret-key-123');
+    expect(settings.onlineApiKey).toBe('sk-ant-super-secret-key-123'); // secret-scan-allow: fixture value, not a real secret
     expect(settings.onlineEnabled).toBe(false);
   });
 });

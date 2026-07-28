@@ -18,7 +18,7 @@ describe('AuthService', () => {
   it('starts uninitialized, then locked after setup + lock', async () => {
     const auth = makeService();
     expect(await auth.getStatus()).toBe('uninitialized');
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     expect(await auth.getStatus()).toBe('unlocked');
     await auth.lock();
     expect(await auth.getStatus()).toBe('locked');
@@ -27,7 +27,7 @@ describe('AuthService', () => {
 
   it('unlocks with the correct passphrase and restores data access', async () => {
     const auth = makeService();
-    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     const client = await db.createClient(
       {
         displayName: 'A.B.',
@@ -49,7 +49,7 @@ describe('AuthService', () => {
 
   it('rejects a wrong passphrase without exposing data', async () => {
     const auth = makeService();
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     await auth.lock();
     await expect(auth.unlockWithPassphrase('wrong')).rejects.toThrow(AuthError);
     expect(auth.current()).toBeNull();
@@ -57,7 +57,7 @@ describe('AuthService', () => {
 
   it('supports PIN unlock when configured', async () => {
     const auth = makeService();
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase', pin: '482913' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase', pin: '482913' }); // secret-scan-allow: fixture value, not a real secret
     await auth.lock();
     const db = await auth.unlockWithPin('482913');
     expect(db).toBeTruthy();
@@ -67,7 +67,7 @@ describe('AuthService', () => {
 
   it('locks out after repeated failures with increasing delay', async () => {
     const auth = makeService();
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     await auth.lock();
     for (let i = 0; i < 4; i++) {
       await expect(auth.unlockWithPassphrase('nope')).rejects.toMatchObject({
@@ -84,7 +84,7 @@ describe('AuthService', () => {
 
   it('resets the failure counter after a successful unlock', async () => {
     const auth = makeService();
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     await auth.lock();
     await expect(auth.unlockWithPassphrase('nope')).rejects.toThrow();
     await auth.unlockWithPassphrase('a-strong-passphrase');
@@ -93,7 +93,7 @@ describe('AuthService', () => {
 
   it('changes the passphrase without losing data', async () => {
     const auth = makeService();
-    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'old-passphrase-123' });
+    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'old-passphrase-123' }); // secret-scan-allow: fixture value, not a real secret
     const client = await db.createClient(
       {
         displayName: 'C.D.',
@@ -116,7 +116,7 @@ describe('AuthService', () => {
 
   it('can add and remove a PIN while unlocked', async () => {
     const auth = makeService();
-    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     expect(await auth.hasPin()).toBe(false);
     await auth.setPin('9137');
     expect(await auth.hasPin()).toBe(true);
@@ -130,7 +130,7 @@ describe('AuthService', () => {
 
   it('stores only ciphertext in the records store', async () => {
     const auth = makeService();
-    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' });
+    const db = await auth.setup({ name: 'Dr. Rivera', passphrase: 'a-strong-passphrase' }); // secret-scan-allow: fixture value, not a real secret
     await db.createClient(
       {
         displayName: 'Sensitive Name',

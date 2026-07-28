@@ -78,10 +78,10 @@ describe('Bug reporting excludes PHI', () => {
   it('saves only structured fields and scrubs secret-shaped tokens', async () => {
     const report = await db.beta.addBugReport({
       ...base,
-      stepsToReproduce: 'Paste key sk-ant-SECRET1234567890 and press save',
+      stepsToReproduce: 'Paste key sk-ant-SECRET1234567890 and press save', // secret-scan-allow: fixture value, not a real secret
       noPhiConfirmed: true,
     });
-    expect(report.stepsToReproduce).not.toContain('sk-ant-SECRET1234567890');
+    expect(report.stepsToReproduce).not.toContain('sk-ant-SECRET1234567890'); // secret-scan-allow: fixture value, not a real secret
     expect(report.stepsToReproduce).toContain('[redacted-key]');
     // The stored report has no field capable of holding client records.
     expect(Object.keys(report).sort()).toEqual(
