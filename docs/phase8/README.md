@@ -37,6 +37,36 @@ Full steps + exact blockers: `native/README.md`.
 - **Performance/stress tests**: 50-client workspace, large transcripts, and
   native-mode backup/restore with a large workspace — with recorded timings.
 
+## E2E harness isolation (hardening patch)
+
+The browser E2E harness previously bound a hard-coded port (4173, `--strictPort`),
+so runs could contend with each other or with a stale server. It now:
+
+- takes an **OS-assigned free port per run** (`E2E_PARALLEL` runs can execute
+  concurrently; `E2E_FORCE_PORT` exists only to exercise the guards);
+- starts **its own preview server** and treats readiness as "the server actually
+  answers with our build", not merely a log line — it polls `index.html`, compares
+  the served entry-bundle hash against `dist/index.html`, and fetches the bundle;
+- **aborts loudly with a non-zero exit** if a stale or foreign server answers the
+  port, rather than testing the wrong build, and re-verifies the served build id
+  at the end of the run;
+- uses a **throwaway browser profile** (`mkdtemp`) per run;
+- **always tears down** server + profile — via `finally` plus `exit`, `SIGINT`,
+  `SIGTERM`, `SIGHUP`, and `uncaughtException` handlers.
+
+`npm run test:e2e:repeat` runs the whole suite 20 consecutive times and reports a
+flake summary (per-run ports, check counts, and any failing check names).
+
+### Encrypted-at-rest check strengthened
+
+The old check substring-scanned the raw IndexedDB dump for PHI markers. Because
+payloads are stored as **base64** ciphertext, the four-character token `PTSD`
+collided with random ciphertext ~1% per 500 KB — a false positive, not a leak
+(verified by simulation; a real run scans ~289 KB across ~249 records). The check
+now makes two independent guarantees: a **structural positive proof** that every
+record payload is exactly an `{iv, data}` base64 envelope, and a **word-boundary**
+content scan that cannot collide with base64 runs.
+
 ## Runtime environment indicator
 
 `runtimeEnvironment()` reports the real environment. In the browser build it says

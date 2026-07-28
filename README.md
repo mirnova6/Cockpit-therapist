@@ -530,7 +530,9 @@ docs/phase7/               Phase 7 governance overview (readiness materials live
 docs/phase8/               Phase 8 overview + real-device testing checklist (in /guides)
 native/tauri/              real Tauri 2 desktop project (src-tauri: Cargo, conf, main.rs)
 native/capacitor/          real Capacitor mobile config
-e2e/smoke.mjs              browser-level end-to-end verification (148 checks)
+e2e/smoke.mjs              browser-level end-to-end verification (150 checks)
+e2e/repeat.mjs             runs the whole E2E suite N times (default 20) for
+                           flake detection; supports E2E_PARALLEL
 ```
 
 Replaceability seams: the storage engine sits behind `StorageAdapter` (the Phase 6
@@ -556,12 +558,20 @@ npm test             # 266 unit tests: crypto, auth, repositories, structured da
                      # 50-client stress / native-mode backup-restore / runtime indicator
 npm run typecheck    # strict TS
 npm run build        # production build
-node e2e/smoke.mjs   # 135-check browser E2E: setup → clients → risk review →
+npm run test:e2e     # 150-check browser E2E: setup → clients → risk review →
                      # extraction → profile → assessments → documents → AI settings →
                      # knowledge → formulation → interventions → assistant →
                      # Analyze-and-Update → evaluation harness → audit/ops viewers →
                      # provider registry → readiness report → device/storage posture →
                      # local-AI guide → guides/checklists → backup restore preview →
                      # HIPAA-conscious governance (PHI gate, packet, data-flow, threats,
-                     # policies, vendor/BAA) → relaunch → encrypted-at-rest check
+                     # policies, vendor/BAA) → beta mode / bug reports / release &
+                     # deployment → relaunch → encrypted-at-rest check
+npm run test:e2e:repeat   # runs the full E2E suite 20 consecutive times (flake gate)
 ```
+
+The E2E harness takes an OS-assigned free port per run, starts its own preview
+server, waits until that server actually serves the current `dist/` build,
+verifies the served build id against `dist/index.html` (aborting loudly on stale
+or foreign servers), uses a throwaway browser profile, and always tears both
+down — so runs are isolated and can even execute in parallel (`E2E_PARALLEL`).
