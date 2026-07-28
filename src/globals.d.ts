@@ -12,4 +12,5 @@ declare module 'node:child_process' {
 }
 declare module 'node:fs' {
   export function readFileSync(path: unknown, encoding: string): string;
+  export function readFileSync(path: unknown): Uint8Array;
 }
