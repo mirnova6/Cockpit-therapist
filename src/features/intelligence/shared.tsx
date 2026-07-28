@@ -200,11 +200,35 @@ export function RetrievalDebugPanel({ debug }: { debug: RetrievalDebug }) {
             {debug.candidateCount} candidate source(s) · time periods covered: {debug.timePeriodsCovered.join(', ') || '—'}
             {debug.contradictionsRetrieved && ' · contradictory evidence retrieved'}
           </p>
+          {/* Phase 9: state the ranking mode ACTUALLY used, never the one merely requested. */}
+          {debug.mode && (
+            <p style={{ margin: '0 0 6px' }}>
+              <strong>Ranking mode:</strong> {debug.mode}
+              {debug.requestedMode && debug.requestedMode !== debug.mode && ` (requested: ${debug.requestedMode})`}
+              {debug.weights &&
+                ` · weights L${debug.weights.lexical}/S${debug.weights.semantic}/M${debug.weights.metadata}`}
+              {typeof debug.semanticScoresAvailable === 'number' &&
+                ` · ${debug.semanticScoresAvailable} vector score(s)`}
+              {debug.modeDowngradedReason && (
+                <span style={{ display: 'block', color: 'var(--amber)' }}>{debug.modeDowngradedReason}</span>
+              )}
+            </p>
+          )}
           <strong>Retrieved:</strong>
           <ul style={{ margin: '4px 0' }}>
             {debug.retrieved.map((row) => (
               <li key={row.ref}>
                 <strong>{row.ref}</strong> {row.label} · {fmtDate(row.date)} · {row.approvalStatus} · score {row.score}
+                {typeof row.lexicalScore === 'number' && (
+                  <>
+                    {' '}
+                    <span className="muted">
+                      (lexical {row.lexicalScore} · semantic {row.semanticScore ?? 0} · metadata {row.metadataBoost ?? 0})
+                    </span>
+                  </>
+                )}
+                {row.keptForLongitudinalCoverage && <> · <em>kept for longitudinal coverage</em></>}
+                {row.contradicts && <> · <em>contradicts another source</em></>}
                 <br />
                 <span className="muted">{row.reasons.join(' · ')}</span>
               </li>

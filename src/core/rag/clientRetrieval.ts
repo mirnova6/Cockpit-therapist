@@ -15,6 +15,14 @@
 import type { ClinicalDatabase } from '../db/database';
 import { APPROVED_STATUSES, factCategoryMeta } from '../db/structuredSchema';
 import { rankByLexicalRelevance, tokenize } from './lexical';
+import {
+  combineScores,
+  normalizeWeights,
+  resolveEffectiveMode,
+  semanticKey,
+  type HybridWeights,
+  type RetrievalMode,
+} from './hybridRetrieval';
 
 export type RetrievalRefType =
   | 'input'
@@ -35,6 +43,8 @@ export interface RetrievalCandidate {
   refType: RetrievalRefType;
   refId: string;
   clientId: string;
+  /** Owning organization, when the workspace is organization-scoped (Phase 9). */
+  organizationId?: string;
   /** ISO date used for recency and longitudinal bucketing. */
   date: string;
   label: string;
@@ -55,6 +65,10 @@ export interface RetrievedSource extends RetrievalCandidate {
   ref: string;
   score: number;
   reasons: string[];
+  /** Phase 9 components (present on every source; advanced UI only). */
+  lexicalScore?: number;
+  semanticScore?: number;
+  metadataBoost?: number;
 }
 
 export interface RetrievalDebugRow {
@@ -65,6 +79,14 @@ export interface RetrievalDebugRow {
   approvalStatus: string;
   score: number;
   reasons: string[];
+  /** Phase 9 score breakdown — advanced detail, debug panel only. */
+  lexicalScore?: number;
+  semanticScore?: number;
+  metadataBoost?: number;
+  /** Kept because an older time period would otherwise be unrepresented. */
+  keptForLongitudinalCoverage?: boolean;
+  /** This source contradicts another retrieved source. */
+  contradicts?: boolean;
 }
 
 export interface RetrievalDebug {
@@ -75,6 +97,12 @@ export interface RetrievalDebug {
   excluded: Array<{ label: string; reason: string }>;
   contradictionsRetrieved: boolean;
   timePeriodsCovered: string[];
+  /** Mode actually used, plus an honest reason if it differs from the request. */
+  mode?: RetrievalMode;
+  requestedMode?: RetrievalMode;
+  modeDowngradedReason?: string;
+  weights?: HybridWeights;
+  semanticScoresAvailable?: number;
 }
 
 export interface ClientRetrievalResult {
@@ -407,6 +435,19 @@ const TYPE_WEIGHTS: Partial<Record<RetrievalRefType, number>> = {
 export interface RetrieveOptions extends CorpusOptions {
   limit?: number;
   today?: string;
+  /**
+   * Phase 9 hybrid retrieval. Defaults to 'lexical' — semantic ranking is only
+   * used when a caller supplies real semantic scores AND asks for it.
+   */
+  mode?: RetrievalMode;
+  weights?: Partial<HybridWeights>;
+  /**
+   * Precomputed similarity per candidate, keyed by `semanticKey(refType, refId)`.
+   * Supplied by the embedding layer; retrieval never calls a provider itself.
+   */
+  semanticScores?: Map<string, number>;
+  /** Namespace guard: when set, every candidate must carry this organization id. */
+  organizationId?: string;
 }
 
 export async function retrieveClientEvidence(
@@ -430,8 +471,37 @@ export async function retrieveClientEvidence(
     );
   }
 
+  // Organization namespace guard (Phase 9): when an org is supplied, a
+  // candidate carrying a DIFFERENT org id is a hard isolation failure.
+  if (options.organizationId) {
+    const foreignOrg = candidates.filter(
+      (c) => c.organizationId !== undefined && c.organizationId !== options.organizationId,
+    );
+    if (foreignOrg.length > 0) {
+      await db.audit(
+        'security',
+        'ai.retrieval-isolation-violation',
+        `blocked ${foreignOrg.length} record(s) from another organization for client ${clientId}`,
+      );
+      throw new RetrievalIsolationError(
+        'Retrieval blocked: the corpus contained a record from another organization.',
+      );
+    }
+  }
+
   const limit = options.limit ?? 12;
   const today = options.today ?? new Date().toISOString().slice(0, 10);
+
+  // Honest mode resolution — semantic/hybrid degrade to lexical (with a stated
+  // reason) rather than silently pretending semantic ranking is active.
+  const requestedMode: RetrievalMode = options.mode ?? 'lexical';
+  const semanticScores = options.semanticScores;
+  const weights = normalizeWeights(options.weights);
+  const { mode: effectiveMode, downgradedReason } = resolveEffectiveMode(requestedMode, {
+    semanticAvailable: (semanticScores?.size ?? 0) > 0,
+    activated: true, // the caller performs the clinician activation gate
+  });
+
   const queryTokens = new Set(tokenize(query));
   const riskIntent = [...queryTokens].some((t) => RISK_QUERY_TERMS.has(t));
   const historyIntent = [...queryTokens].some((t) => HISTORY_QUERY_TERMS.has(t));
@@ -456,14 +526,17 @@ export async function retrieveClientEvidence(
 
   const scored: RetrievedSource[] = ranked.map(({ doc, score, matchedTerms }, index) => {
     const reasons: string[] = [`Lexical match: ${matchedTerms.join(', ')}`];
-    let total = score;
+    // Metadata boosts are accumulated separately from the lexical signal so the
+    // hybrid combiner can weight them independently (and so the debug panel can
+    // show WHY a source ranked where it did).
+    let metadata = 0;
 
     const typeWeight = TYPE_WEIGHTS[doc.refType] ?? 0.2;
-    total += typeWeight;
+    metadata += typeWeight;
     reasons.push(`Source type weight (${doc.refType})`);
 
     if (doc.approvalStatus === 'approved' || doc.approvalStatus === 'edited') {
-      total += 0.8;
+      metadata += 0.8;
       reasons.push('Clinician-approved');
     } else if (doc.approvalStatus.startsWith('pending')) {
       reasons.push('Pending — explicitly included by clinician');
@@ -471,28 +544,43 @@ export async function retrieveClientEvidence(
 
     const age = daysAgo(doc.date);
     if (age <= 30) {
-      total += 0.6;
+      metadata += 0.6;
       reasons.push('Recent (≤30 days)');
     } else if (age <= 90) {
-      total += 0.3;
+      metadata += 0.3;
       reasons.push('Recent (≤90 days)');
     } else if (historyIntent) {
-      total += 0.4;
+      metadata += 0.4;
       reasons.push('Older material boosted for longitudinal question');
     }
 
     const repeatQuarters = doc.category ? (quartersByCategory.get(doc.category)?.size ?? 0) : 0;
     if (repeatQuarters >= 3) {
-      total += 0.5;
+      metadata += 0.5;
       reasons.push(`Theme recurs across ${repeatQuarters} time periods`);
     }
 
     if (doc.riskRelated && riskIntent) {
-      total += 0.7;
+      metadata += 0.7;
       reasons.push('Risk-sensitive content matching a risk question');
     }
 
-    return { ...doc, ref: `E${index + 1}`, score: Math.round(total * 1000) / 1000, reasons };
+    const semantic = semanticScores?.get(semanticKey(doc.refType, doc.refId)) ?? 0;
+    if (effectiveMode !== 'lexical' && semantic > 0) {
+      reasons.push(`Semantic similarity ${semantic.toFixed(3)}`);
+    }
+
+    const parts = combineScores(effectiveMode, { lexical: score, semantic, metadata }, weights);
+
+    return {
+      ...doc,
+      ref: `E${index + 1}`,
+      score: parts.final,
+      reasons,
+      lexicalScore: parts.lexical,
+      semanticScore: parts.semantic,
+      metadataBoost: parts.metadata,
+    };
   });
 
   scored.sort((a, b) => b.score - a.score);
@@ -538,6 +626,11 @@ export async function retrieveClientEvidence(
       approvalStatus: s.approvalStatus,
       score: s.score,
       reasons: s.reasons,
+      lexicalScore: s.lexicalScore,
+      semanticScore: s.semanticScore,
+      metadataBoost: s.metadataBoost,
+      keptForLongitudinalCoverage: s.reasons.some((r) => r.startsWith('Included for longitudinal coverage')),
+      contradicts: s.refType === 'contradiction',
     })),
     excluded: [
       ...excluded,
@@ -548,6 +641,11 @@ export async function retrieveClientEvidence(
     ],
     contradictionsRetrieved: finalSources.some((s) => s.refType === 'contradiction'),
     timePeriodsCovered: [...new Set(finalSources.map((s) => quarterOf(s.date)))].sort(),
+    mode: effectiveMode,
+    requestedMode,
+    modeDowngradedReason: downgradedReason,
+    weights,
+    semanticScoresAvailable: semanticScores?.size ?? 0,
   };
 
   return {

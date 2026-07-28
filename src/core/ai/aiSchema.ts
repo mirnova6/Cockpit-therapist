@@ -90,6 +90,23 @@ export interface AiSettings {
   embeddingOnlineModel: string;
   embeddingOnlineApiKey?: string;
 
+  // ---- Phase 9 hybrid retrieval ----
+  /**
+   * Requested retrieval mode. Defaults to 'lexical'. Semantic/hybrid ranking is
+   * only APPLIED when an embedding provider is genuinely configured, vectors
+   * exist, and `hybridRetrievalActivated` is true.
+   */
+  retrievalMode: 'lexical' | 'semantic-test' | 'hybrid';
+  /**
+   * Clinician activation gate — set only after reviewing hybrid-vs-lexical
+   * evaluation results. Never enabled by default.
+   */
+  hybridRetrievalActivated: boolean;
+  /** Configurable weighting with safe defaults (lexical stays dominant). */
+  hybridWeightLexical: number;
+  hybridWeightSemantic: number;
+  hybridWeightMetadata: number;
+
   updatedAt: string;
 }
 
@@ -108,6 +125,11 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   embeddingLocalModel: '',
   embeddingOnlineEndpoint: '',
   embeddingOnlineModel: '',
+  retrievalMode: 'lexical',
+  hybridRetrievalActivated: false,
+  hybridWeightLexical: 1,
+  hybridWeightSemantic: 0.6,
+  hybridWeightMetadata: 1,
   updatedAt: '',
 };
 

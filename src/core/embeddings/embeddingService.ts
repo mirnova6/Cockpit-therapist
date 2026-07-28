@@ -12,7 +12,12 @@ import { evaluateConsent } from '../ai/aiGateway';
 import { getProviderByType } from '../ai/providerRegistry';
 import type { AiSettings } from '../ai/aiSchema';
 import type { ClinicalDatabase } from '../db/database';
-import { buildClientCorpus } from '../rag/clientRetrieval';
+import {
+  buildClientCorpus,
+  retrieveClientEvidence,
+  type ClientRetrievalResult,
+} from '../rag/clientRetrieval';
+import { semanticKey, type HybridWeights, type RetrievalMode } from '../rag/hybridRetrieval';
 import { rankByLexicalRelevance } from '../rag/lexical';
 import {
   activeEmbeddingProvider,
@@ -180,4 +185,82 @@ export async function lexicalPreviewSearch(
   return rankByLexicalRelevance(query, candidates, (c) => c.text)
     .slice(0, 10)
     .map(({ doc, score }) => ({ refType: doc.refType, refId: doc.refId, score: Math.round(score * 1000) / 1000 }));
+}
+
+// ------------------------------------------------- Phase 9 hybrid retrieval
+
+export interface HybridRetrievalOptions {
+  mode?: RetrievalMode;
+  weights?: Partial<HybridWeights>;
+  limit?: number;
+  today?: string;
+  includePendingFactIds?: string[];
+  organizationId?: string;
+  /**
+   * Clinician activation gate. Hybrid/semantic ranking stays OFF until this is
+   * true, even when a provider is configured — activation is a deliberate act
+   * taken after reviewing evaluation results.
+   */
+  activated?: boolean;
+  onlineSendConfirmed?: boolean;
+}
+
+/**
+ * Retrieve with hybrid ranking. Computes semantic similarity ONLY when a real
+ * embedding provider is configured, vectors exist for the client, and the
+ * clinician has activated hybrid/semantic mode; otherwise it retrieves
+ * lexically and reports the downgrade honestly in `debug.modeDowngradedReason`.
+ *
+ * Semantic scores are joined to candidates by (refType, refId), so lexical
+ * ranking still covers candidates that have no vector — exact wording, dates,
+ * medications, assessment names and quotations remain discoverable.
+ */
+export async function retrieveHybrid(
+  db: ClinicalDatabase,
+  settings: AiSettings,
+  clientId: string,
+  query: string,
+  opts: HybridRetrievalOptions = {},
+): Promise<ClientRetrievalResult> {
+  const requested: RetrievalMode = opts.mode ?? 'lexical';
+  let semanticScores: Map<string, number> | undefined;
+
+  if (requested !== 'lexical' && opts.activated) {
+    const provider = activeEmbeddingProvider(settings);
+    if (provider.providerType !== 'none') {
+      // Online embedding of the QUERY obeys the same outbound gate as any send.
+      if (provider.providerType !== 'online' || opts.onlineSendConfirmed) {
+        const stored = await db.governance.listEmbeddings(clientId);
+        // Post-retrieval namespace check: a vector from another client (or
+        // another organization) must never influence ranking.
+        const foreign = stored.filter((e) => e.clientId !== clientId);
+        if (foreign.length > 0) {
+          await db.audit(
+            'security',
+            'ai.embedding-isolation-violation',
+            `blocked ${foreign.length} foreign vector(s) for client ${clientId}`,
+          );
+          throw new EmbeddingRefusedError(
+            'Semantic retrieval blocked: a stored vector belonged to another client.',
+          );
+        }
+        if (stored.length > 0) {
+          const [queryVector] = await provider.embed([query], settings);
+          semanticScores = new Map(
+            stored.map((e) => [semanticKey(e.refType, e.refId), cosineSimilarity(queryVector, e.vector)]),
+          );
+        }
+      }
+    }
+  }
+
+  return retrieveClientEvidence(db, clientId, query, {
+    limit: opts.limit,
+    today: opts.today,
+    includePendingFactIds: opts.includePendingFactIds,
+    organizationId: opts.organizationId,
+    mode: requested,
+    weights: opts.weights,
+    semanticScores,
+  });
 }
