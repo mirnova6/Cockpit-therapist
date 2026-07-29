@@ -162,5 +162,14 @@ export async function encryptJson(dek: CryptoKey, value: unknown): Promise<Encry
 }
 
 export async function decryptJson<T>(dek: CryptoKey, payload: EncryptedPayload): Promise<T> {
-  return JSON.parse(textDecoder.decode(await decryptBytes(dek, payload))) as T;
+  return JSON.parse(await decryptText(dek, payload)) as T;
+}
+
+/**
+ * Decrypts to the raw JSON string. Used by the store's session plaintext cache,
+ * which keeps the string (not a shared object) so every caller still receives
+ * an independent, freely mutable value.
+ */
+export async function decryptText(dek: CryptoKey, payload: EncryptedPayload): Promise<string> {
+  return textDecoder.decode(await decryptBytes(dek, payload));
 }

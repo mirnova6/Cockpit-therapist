@@ -30,7 +30,7 @@ export function EvalRunScreen() {
   const run = runs.find((r) => r.id === runId);
   if (!run) {
     return (
-      <main className="page">
+      <main id="main-content" tabIndex={-1} className="page">
         <Card>
           <EmptyState icon="activity" title="Run not found">
             <button className="btn btn--secondary" onClick={() => navigate('/evaluation')}>Back to evaluation</button>
@@ -43,7 +43,7 @@ export function EvalRunScreen() {
   const highPriority = run.errors.filter((e) => e.highPriority);
 
   return (
-    <main className="page">
+    <main id="main-content" tabIndex={-1} className="page">
       <div className="stack" style={{ maxWidth: 1000, margin: '0 auto' }}>
         <div className="spread">
           <button className="btn btn--ghost btn--sm" onClick={() => navigate('/evaluation')}>

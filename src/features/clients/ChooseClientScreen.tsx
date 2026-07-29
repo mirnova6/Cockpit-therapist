@@ -142,7 +142,7 @@ export function ChooseClientScreen() {
         </button>
       </header>
 
-      <main className="page stack" style={{ gap: 20 }}>
+      <main id="main-content" tabIndex={-1} className="page stack" style={{ gap: 20 }}>
         <div className="spread">
           <div>
             <h1>Choose client</h1>

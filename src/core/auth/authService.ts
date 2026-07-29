@@ -277,6 +277,13 @@ export class AuthService {
       } catch {
         // best-effort; locking must always succeed
       }
+      // Dropping the session already drops the store and its plaintext cache;
+      // clearing explicitly means a stray reference cannot outlive the lock.
+      try {
+        this.session.db.store.clearCache();
+      } catch {
+        // best-effort; locking must always succeed
+      }
     }
     this.session = null;
   }

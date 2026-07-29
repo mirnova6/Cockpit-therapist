@@ -146,7 +146,7 @@ export function ThreatModelScreen() {
   const date = new Date().toISOString().slice(0, 10);
 
   return (
-    <main className="page">
+    <main id="main-content" tabIndex={-1} className="page">
       <div className="stack" style={{ maxWidth: 1000, margin: '0 auto' }}>
         <div className="spread">
           <button className="btn btn--ghost btn--sm" onClick={() => navigate('/governance')}>

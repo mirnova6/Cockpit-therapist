@@ -159,7 +159,7 @@ export function AppSettingsScreen() {
         <ProcessingStatusBadge />
       </header>
 
-      <main className="page stack" style={{ maxWidth: 760 }}>
+      <main id="main-content" tabIndex={-1} className="page stack" style={{ maxWidth: 760 }}>
         <Card title="Profile" icon="user">
           <dl className="kv">
             <dt>Clinician</dt>

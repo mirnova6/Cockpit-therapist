@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../../app/components/Icon';
 import { Badge, EmptyState, RiskBadge } from '../../app/components/ui';
@@ -106,9 +106,19 @@ export function ClientDashboardLayout() {
   const activeReady = useAiStore((s) => s.activeReady);
   const [openGroup, setOpenGroup] = useState<string>();
 
+  // Escape closes the mobile navigation sheet, matching Modal behaviour (a11y §18).
+  useEffect(() => {
+    if (!openGroup) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenGroup(undefined);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [openGroup]);
+
   if (!client) {
     return (
-      <main className="page">
+      <main id="main-content" tabIndex={-1} className="page">
         <div className="card">
           <EmptyState icon="user" title="Client not found">
             <button className="btn btn--secondary" onClick={() => navigate('/')}>
@@ -203,7 +213,15 @@ export function ClientDashboardLayout() {
       </div>
 
       {/* Mobile: five grouped destinations, never 14 items. */}
-      {openGroup && <div className="bottom-sheet__backdrop mobile-only" onClick={() => setOpenGroup(undefined)} />}
+      {/* Backdrop is a real button so it is keyboard reachable and named (a11y §18). */}
+      {openGroup && (
+        <button
+          type="button"
+          className="bottom-sheet__backdrop mobile-only"
+          aria-label="Close navigation menu"
+          onClick={() => setOpenGroup(undefined)}
+        />
+      )}
       {openGroup && (
         <div className="bottom-sheet mobile-only" role="menu" aria-label={NAV_GROUPS.find((g) => g.key === openGroup)?.label}>
           {NAV_GROUPS.find((g) => g.key === openGroup)?.items.map((tab) => (

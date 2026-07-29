@@ -20,6 +20,8 @@ declare module 'node:fs' {
   export function readFileSync(path: unknown): Uint8Array;
   export function writeFileSync(path: unknown, data: string): void;
   export function mkdtempSync(prefix: string): string;
+  export function readdirSync(path: string): string[];
+  export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean; size: number };
 }
 declare module 'node:os' {
   export function tmpdir(): string;

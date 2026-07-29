@@ -80,6 +80,8 @@ export function App() {
 
   return (
     <>
+      {/* Skip-navigation: first tab stop, visible on focus (a11y §18). */}
+      <a className="skip-nav" href="#main-content">Skip to main content</a>
       <BetaBanner />
       <Routes>
       <Route path="/" element={<ChooseClientScreen />} />

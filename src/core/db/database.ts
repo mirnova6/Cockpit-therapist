@@ -7,6 +7,7 @@ import { BetaRepository } from '../beta/betaRepository';
 import { EvalRepository } from '../eval/evalRepository';
 import { GovernanceRepository } from '../governance/governanceRepository';
 import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
+import { DiagnosticsRepository } from '../observability/diagnostics';
 import { OrgRepository } from '../org/orgService';
 import { EncryptedStore } from '../storage/encryptedStore';
 import type { StorageAdapter } from '../storage/indexedDbAdapter';
@@ -67,6 +68,8 @@ export class ClinicalDatabase {
   readonly beta: BetaRepository;
   /** Phase 9 organizations, workspaces, users, memberships, supervision. */
   readonly org: OrgRepository;
+  /** Phase 9 PHI-free operational diagnostics. */
+  readonly diagnostics: DiagnosticsRepository;
 
   constructor(
     readonly adapter: StorageAdapter,
@@ -105,6 +108,7 @@ export class ClinicalDatabase {
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
+    this.diagnostics = new DiagnosticsRepository({ store: this.store });
     this.structured = new StructuredRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),

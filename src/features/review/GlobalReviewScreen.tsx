@@ -28,7 +28,7 @@ export function GlobalReviewScreen() {
         <div className="topbar__spacer" />
         <Badge tone="green" icon="shield">Local-only</Badge>
       </header>
-      <main className="page stack" style={{ maxWidth: 860 }}>
+      <main id="main-content" tabIndex={-1} className="page stack" style={{ maxWidth: 860 }}>
         <p className="muted small">
           {globalQueue.length} pending item{globalQueue.length === 1 ? '' : 's'} across clients
           {riskCount > 0 && (

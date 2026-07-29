@@ -10,7 +10,7 @@
   --surface-2: #f2f5f3;
   --ink: #22303c;
   --ink-soft: #51616e;
-  --ink-faint: #7e8c97;
+  --ink-faint: #64727c;
   --line: #e2e8e3;
   --line-strong: #cdd6cf;
 
@@ -19,9 +19,9 @@
   --brand-soft: #e7eff5;
   --brand-softer: #f1f6fa;
 
-  --green: #55806b;
+  --green: #4a7260;
   --green-soft: #e6f0ea;
-  --amber: #9a6d1f;
+  --amber: #8a5f14;
   --amber-soft: #f7eed9;
   --red: #a3524e;
   --red-soft: #f7e9e8;
@@ -651,4 +651,65 @@ a:hover { text-decoration: underline; }
 @media (max-width: 560px) {
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dt { margin-top: 8px; }
+}
+
+/* ------------------------------------------------ accessibility (Phase 9) */
+
+/* Skip navigation: off-screen until focused, then clearly visible. */
+.skip-nav {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--brand-deep, #1f4b6e);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 8px 0;
+}
+.skip-nav:focus {
+  left: 0;
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* Always-visible focus indicator (never rely on hover or color alone). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--brand, #2b6cb0);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Mobile touch targets: minimum comfortable hit area. */
+@media (pointer: coarse) {
+  .btn,
+  .icon-btn,
+  .list-row {
+    min-height: 44px;
+  }
+}
+
+/* Respect the user's reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Screen-reader-only text for non-color status alternatives. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

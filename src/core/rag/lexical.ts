@@ -39,20 +39,62 @@ for (const [canon, alts] of Object.entries(SYNONYMS)) {
   for (const alt of alts) CANONICAL.set(alt, canon);
 }
 
-function stem(token: string): string {
-  const canon = CANONICAL.get(token);
-  if (canon) return canon;
-  // very light suffix stripping
-  return token.replace(/(?:ing|ed|es|s)$/, (m) => (token.length - m.length >= 4 ? '' : m));
+/**
+ * Very light suffix stripping. Behaviourally identical to the original
+ * `/(?:ing|ed|es|s)$/` replace — the longest matching suffix is considered, and
+ * if stripping it would leave a stem shorter than 4 characters the token is
+ * left alone rather than falling through to a shorter suffix. Written with
+ * `endsWith` instead of a regex-with-callback because stemming runs on every
+ * token of every document on every query and was the dominant retrieval cost.
+ * Exported so the equivalence can be fuzz-tested against the original regex.
+ */
+export function stripSuffix(token: string): string {
+  const len = token.length;
+  if (token.endsWith('ing')) return len >= 7 ? token.slice(0, len - 3) : token;
+  if (token.endsWith('ed') || token.endsWith('es')) return len >= 6 ? token.slice(0, len - 2) : token;
+  if (token.endsWith('s')) return len >= 5 ? token.slice(0, len - 1) : token;
+  return token;
 }
 
+function stem(token: string): string {
+  return CANONICAL.get(token) ?? stripSuffix(token);
+}
+
+const TOKEN_SPLIT = /[^a-z0-9']+/;
+
 export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t))
-    .map(stem)
-    .filter(Boolean);
+  const out: string[] = [];
+  // Single pass: split once, then filter/stem inline. The previous
+  // filter().map().filter() chain allocated three intermediate arrays per
+  // document, which is measurable when every query re-tokenizes the corpus.
+  for (const raw of text.toLowerCase().split(TOKEN_SPLIT)) {
+    if (raw.length < 2 || STOPWORDS.has(raw)) continue;
+    const token = stem(raw);
+    if (token) out.push(token);
+  }
+  return out;
+}
+
+/**
+ * Term frequencies for one document. Built in the same pass as tokenization so
+ * scoring never walks a document's tokens more than once.
+ */
+export interface DocTerms {
+  counts: Map<string, number>;
+  length: number;
+}
+
+export function countTerms(text: string): DocTerms {
+  const counts = new Map<string, number>();
+  let length = 0;
+  for (const raw of text.toLowerCase().split(TOKEN_SPLIT)) {
+    if (raw.length < 2 || STOPWORDS.has(raw)) continue;
+    const token = stem(raw);
+    if (!token) continue;
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+    length++;
+  }
+  return { counts, length };
 }
 
 export interface ScoredDoc<T> {
@@ -72,14 +114,20 @@ export function rankByLexicalRelevance<T>(
 ): Array<ScoredDoc<T>> {
   const queryTerms = [...new Set(tokenize(query))];
   if (queryTerms.length === 0) return [];
-  const tokenized = docs.map((doc) => tokenize(textOf(doc)));
+
+  // Term counts are built once per document. Document frequency is then a Map
+  // lookup per (term, document) instead of a linear scan of that document's
+  // token array — the scoring pass never re-walks a document's tokens.
+  const terms = docs.map((doc) => countTerms(textOf(doc)));
   const n = docs.length || 1;
-  const avgLen = tokenized.reduce((sum, t) => sum + t.length, 0) / n || 1;
+  let totalLen = 0;
+  for (const t of terms) totalLen += t.length;
+  const avgLen = totalLen / n || 1;
 
   const docFreq = new Map<string, number>();
   for (const term of queryTerms) {
     let df = 0;
-    for (const tokens of tokenized) if (tokens.includes(term)) df++;
+    for (const t of terms) if (t.counts.has(term)) df++;
     docFreq.set(term, df);
   }
 
@@ -87,10 +135,8 @@ export function rankByLexicalRelevance<T>(
   const b = 0.6;
   const results: Array<ScoredDoc<T>> = [];
   for (let i = 0; i < docs.length; i++) {
-    const tokens = tokenized[i];
-    if (tokens.length === 0) continue;
-    const counts = new Map<string, number>();
-    for (const token of tokens) counts.set(token, (counts.get(token) ?? 0) + 1);
+    const { counts, length } = terms[i];
+    if (length === 0) continue;
     let score = 0;
     const matched: string[] = [];
     for (const term of queryTerms) {
@@ -99,7 +145,7 @@ export function rankByLexicalRelevance<T>(
       matched.push(term);
       const df = docFreq.get(term) ?? 0;
       const idf = Math.log(1 + (n - df + 0.5) / (df + 0.5));
-      score += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (tokens.length / avgLen))));
+      score += idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (length / avgLen))));
     }
     if (matched.length > 0) results.push({ doc: docs[i], score, matchedTerms: matched });
   }
