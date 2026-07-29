@@ -93,6 +93,32 @@ one of these is tracked in the Real PHI Readiness Gate.
 5. Export the deployment decision report from `/release` and file it with the
    release. It must read **"Ready for fictional-data beta"**.
 
+## G. Merge baseline
+
+| Field | Value |
+| --- | --- |
+| Merge commit | `fb1cfcded3bbc3084d900891db82e99400bf08b1` |
+| Short hash | `fb1cfcd` |
+| Merged | 2026-07-29 |
+| Source PR | #1 — Phases 6–9 |
+| Branch merged | `claude/therapist-assistant-app-miat78` → `main` |
+| Post-merge CI run | [30478546627](https://github.com/mirnova6/Cockpit-therapist/actions/runs/30478546627) |
+| Baseline tag | `fictional-data-beta-baseline` |
+
+This is the commit the fictional-data beta baseline tag points at.
+
+### Post-merge CI result on this commit
+
+| Job | Result |
+| --- | --- |
+| Unit, typecheck, build, E2E | ✅ success |
+| Repeated E2E stability | ✅ success — **20/20 runs, 175 checks each, 20/20 distinct ports, 0 failures** |
+| Native desktop (Tauri) compile check | ✅ success — `cargo check` + `cargo clippy -- -D warnings` |
+| Dependency audit and secret scanning | ✅ success |
+
+The stability job ran **automatically** on the `main` push; it is gated to
+`main`, tags and manual dispatch.
+
 ## F. Sign-off
 
 | Field | Value |

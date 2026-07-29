@@ -60,9 +60,14 @@ readable copy for a clinician who does not run Cockpit.
   you why in the debug panel.
 - **No OCR.** Scanned documents are detected and reported as needing manual
   entry rather than silently producing empty text.
-- **No signed desktop or mobile app yet.** This is a browser build. The native
-  projects are real and buildable but require toolchains and signing certificates
-  that are not yet available.
+- **No signed desktop or mobile app.** This is a browser build. The Rust shell
+  now compile-verifies in CI, but **no signed binary of any kind exists** for
+  macOS, Windows, iOS or Android — producing one needs macOS and Windows hosts
+  plus signing certificates that are not available. Do not describe this release
+  as offering a native app.
+- **The application icons in the repository are placeholders**, generated
+  programmatically so the native build has something valid to embed. They are
+  **not release assets** and must be replaced before any distributable build.
 - **No online AI proxy.** A reference implementation exists in the repository; it
   is not deployed and is not connected.
 
@@ -103,13 +108,24 @@ readable copy for a clinician who does not run Cockpit.
 - Triage status: `/maintenance`
 - Readiness posture: `/governance`
 
+## Build identity
+
+| | |
+| --- | --- |
+| Merge commit | `fb1cfcded3bbc3084d900891db82e99400bf08b1` |
+| Short hash | `fb1cfcd` |
+| Merged from | PR #1 — Phases 6–9 |
+| Date | 2026-07-29 |
+| Baseline tag | `fictional-data-beta-baseline` |
+
 ## Verification for this build
 
 | | |
 | --- | --- |
 | Unit tests | 472 across 44 files |
 | Browser E2E checks | 175 |
-| Repeated E2E stability | 20/20 consecutive runs, zero flakes |
+| Repeated E2E stability | 20/20 consecutive runs on the merge commit in CI — 175 checks each, 20/20 distinct ports, zero failures |
+| Native Rust shell | compiles clean (`cargo check` + `cargo clippy -- -D warnings`) in CI. **No signed binary exists.** |
 | Typecheck / build | clean |
 | Secret scan | clean |
 | Dependency advisories | 6, all reviewed |
