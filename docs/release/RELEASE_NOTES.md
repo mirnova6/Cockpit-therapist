@@ -116,7 +116,7 @@ readable copy for a clinician who does not run Cockpit.
 | Short hash | `fb1cfcd` |
 | Merged from | PR #1 — Phases 6–9 |
 | Date | 2026-07-29 |
-| Baseline tag | `fictional-data-beta-baseline` |
+| Baseline tag | `fictional-data-beta-baseline` — **not yet created**; see the beta checklist |
 
 ## Verification for this build
 

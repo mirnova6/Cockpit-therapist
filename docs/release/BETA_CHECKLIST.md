@@ -103,7 +103,7 @@ one of these is tracked in the Real PHI Readiness Gate.
 | Source PR | #1 — Phases 6–9 |
 | Branch merged | `claude/therapist-assistant-app-miat78` → `main` |
 | Post-merge CI run | [30478546627](https://github.com/mirnova6/Cockpit-therapist/actions/runs/30478546627) |
-| Baseline tag | `fictional-data-beta-baseline` |
+| Baseline tag | `fictional-data-beta-baseline` — **NOT YET PUSHED**, see below |
 
 This is the commit the fictional-data beta baseline tag points at.
 
@@ -118,6 +118,25 @@ This is the commit the fictional-data beta baseline tag points at.
 
 The stability job ran **automatically** on the `main` push; it is gated to
 `main`, tags and manual dispatch.
+
+### Outstanding: the baseline tag has not been created
+
+All post-merge checks passed, so the tag is warranted — but it could not be
+pushed from the automation environment, whose git proxy rejects tag refs with
+HTTP 403 while allowing branch pushes. **No tag currently exists on the remote.**
+
+A maintainer must create it:
+
+```bash
+git fetch origin main
+git tag -a fictional-data-beta-baseline fb1cfcded3bbc3084d900891db82e99400bf08b1 \
+  -m "Fictional-data beta baseline (PR #1, Phases 6-9). CI run 30478546627 green:
+20/20 stability runs, 175 checks each, 20/20 distinct ports. Real PHI Readiness
+Gate BLOCKED. No signed native binary exists; icons are placeholders."
+git push origin fictional-data-beta-baseline
+```
+
+Update this row to "created" once it exists.
 
 ## F. Sign-off
 
