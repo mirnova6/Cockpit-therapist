@@ -72,7 +72,34 @@ accepted.
   logging, and provider-error sanitization. **It is a reference, not a deployed
   service**, and using it does not make online PHI permissible; the Phase 7 gate
   still governs that.
-- `.github/workflows/ci.yml` runs typecheck, unit tests, build and a secret scan.
+- `.github/workflows/ci.yml` runs typecheck, unit tests, build, E2E, a secret
+  scan, and a dependency-advisory review gate.
+
+### Dependency advisories
+
+`npm audit` alone is a poor gate: it fails on development-toolchain advisories
+that never ship, which trains people to add `|| true` and stop reading it.
+`scripts/audit-deps.mjs` instead requires every advisory to be recorded in
+`security/advisory-exceptions.json` with a written reason, whether it affects
+shipped code or only the dev toolchain, and what would make it reachable again.
+A **new** advisory always fails CI until a human reviews it, entries expire, and
+nothing is suppressed silently — every advisory is printed either way.
+
+Current state: 6 advisories, all reviewed. Five are development-toolchain only
+(vite/esbuild/vitest dev servers, none of which the packaged app or CI ever
+starts) and are fixable only by major upgrades to vite 8 / vitest 4, tracked as
+toolchain work. One ships — a React Router RSC-mode CSRF bypass — and is not
+reachable because the app is a client-only SPA with no server, no RSC, no route
+actions and no loaders.
+
+`react-router-dom` was upgraded 6.30.4 → 7.18.2 during this work. That clears
+GHSA-wrjc-x8rr-h8h6 and GHSA-337j-9hxr-rhxg, whose affected code
+(`Link`/`useNavigate` redirect handling) the app **does** execute, in exchange
+for one advisory whose code it cannot reach at all. No published version is
+currently free of all three. The app's router surface (`HashRouter`, `Routes`,
+`Route`, `Navigate`, `NavLink`, `Outlet`, `useNavigate`, `useParams`,
+`useLocation`, `useOutletContext`, `useSearchParams`) is unchanged between the
+two majors; typecheck, 472 unit tests and all 175 E2E checks pass on v7.
 
 ## 5. Accessibility (§18)
 

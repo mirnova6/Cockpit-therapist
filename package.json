@@ -2,7 +2,7 @@
   "name": "cockpit-clinical-workspace",
   "private": true,
   "version": "0.1.0",
-  "description": "Cockpit \u2014 a local-first, client-centered clinical workspace for therapists. Phase 1: foundation (auth, encrypted client database, clinical input storage).",
+  "description": "Cockpit — a local-first, client-centered clinical workspace for therapists. Phase 1: foundation (auth, encrypted client database, clinical input storage).",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,13 +13,14 @@
     "test:watch": "vitest",
     "test:e2e": "node e2e/smoke.mjs",
     "test:e2e:repeat": "node e2e/repeat.mjs 20",
-    "scan:secrets": "node scripts/scan-secrets.mjs"
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "audit:deps": "node scripts/audit-deps.mjs"
   },
   "dependencies": {
     "idb": "^8.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2",
+    "react-router-dom": "^7.18.2",
     "zustand": "^4.5.5"
   },
   "devDependencies": {

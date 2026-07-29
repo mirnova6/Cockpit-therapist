@@ -484,7 +484,13 @@ the app still makes no compliance claim.
   record**. Review status, AI-analysis consent and the sending clinician's risk
   sign-off never transfer, and an import always creates a new client rather than
   merging.
-- **CI** — typecheck, unit tests, build and a secret scan on every push.
+- **CI** — typecheck, unit tests, build, E2E, a secret scan, and a
+  **dependency-advisory review gate**. Rather than `npm audit || true`, every
+  advisory must be recorded in `security/advisory-exceptions.json` with a
+  written reason and an expiry; a new advisory always fails CI until a human
+  reviews it, and nothing is suppressed silently. `react-router-dom` was
+  upgraded 6.30.4 → 7.18.2 as part of this, clearing the two advisories whose
+  affected code the app actually executes.
 
 Full detail: `docs/phase9/README.md` and `docs/phase9/ACCESSIBILITY.md`.
 
