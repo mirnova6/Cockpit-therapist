@@ -38,6 +38,7 @@ import { ReleaseScreen } from '../features/release/ReleaseScreen';
 import { InteropScreen } from '../features/interop/InteropScreen';
 import { MaintenanceScreen } from '../features/maintenance/MaintenanceScreen';
 import { BetaBanner } from './components/BetaBanner';
+import { PublicDemoBanner } from './components/PublicDemoBanner';
 import { useBetaStore } from '../state/betaStore';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
 import { AssistantTab } from '../features/intelligence/AssistantTab';
@@ -143,6 +144,9 @@ export function App() {
 export function Root() {
   return (
     <HashRouter>
+      {/* Outside <App> so the notice is present on the setup and lock screens
+          too — those are the first thing a visitor to the public build sees. */}
+      <PublicDemoBanner />
       <App />
     </HashRouter>
   );

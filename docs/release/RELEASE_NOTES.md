@@ -101,6 +101,19 @@ readable copy for a clinician who does not run Cockpit.
   development toolchain and never ship, one is in shipped code but is not
   reachable in this app's configuration. See `security/advisory-exceptions.json`.
 
+## Where to try it
+
+**https://mirnova6.github.io/Cockpit-therapist/**
+
+A public demonstration build. It carries a permanent banner stating it is for
+fictional or fully de-identified data only and is not approved for real client
+information. Everything you enter is encrypted and stays in your own browser on
+your own device — there is no server and nothing is uploaded. Clearing your
+browser data deletes the workspace, so take a backup from workspace settings if
+you want to keep it.
+
+See `docs/release/GITHUB_PAGES.md` for how it is built and verified.
+
 ## Getting help and giving feedback
 
 - Guided checklist and feedback: `/beta`
