@@ -7,12 +7,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "DEPLOY_TARGET=github-pages vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node e2e/smoke.mjs",
     "test:e2e:repeat": "node e2e/repeat.mjs 20",
+    "test:pages": "node e2e/pages.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "audit:deps": "node scripts/audit-deps.mjs"
   },

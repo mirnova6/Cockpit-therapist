@@ -30,6 +30,8 @@ Using the app does not make a practice HIPAA-compliant.
 | A9 | No build artifact contains a provider API key or clinical data | ✅ | Secret scan + `dist/` contains no fixture data |
 | A10 | Native Rust shell compiles clean | ✅ | `cargo check` + `cargo clippy -D warnings`; `native` job in CI |
 | A11 | Release notes written and reviewed | ✅ | `docs/release/RELEASE_NOTES.md` |
+| A12 | Public web build labelled and verified | ✅ | `npm run build:pages` + `scripts/verify-pages-build.mjs` + `npm run test:pages` (14 checks) |
+| A13 | Public build contains no secrets and no real client data | ✅ | Build gate asserts it; all bundled sample names marked `[FICTIONAL]` |
 
 **If A5 is not blocked, stop.** A beta build must not ship with the PHI gate
 satisfied unless every gate item has genuinely been completed and approved.

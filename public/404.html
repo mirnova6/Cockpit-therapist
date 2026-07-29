@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Cockpit — redirecting</title>
+    <script>
+      // Cockpit uses HashRouter, so every route the app generates already
+      // survives a refresh on a static host: the part after '#' is never sent
+      // to the server. This file only catches a bare path someone typed or an
+      // old link (e.g. /Cockpit-therapist/clients/123 with no '#'), and sends
+      // it to the equivalent hash route rather than showing GitHub's 404.
+      (function () {
+        var base = '/Cockpit-therapist/';
+        var path = window.location.pathname;
+        var rest = path.indexOf(base) === 0 ? path.slice(base.length) : '';
+        var target = base + '#/' + rest.replace(/^\/+/, '') + window.location.search;
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>
+      Redirecting to <a href="/Cockpit-therapist/">Cockpit</a>. This is a
+      fictional / de-identified beta and is not approved for real client
+      information.
+    </p>
+  </body>
+</html>

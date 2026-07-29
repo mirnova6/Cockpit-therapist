@@ -1,0 +1,89 @@
+# GitHub Pages deployment for the Cockpit fictional-data beta.
+#
+# Publishes the static browser build to
+# https://mirnova6.github.io/Cockpit-therapist/
+#
+# NO SECRETS ARE USED OR NEEDED. This workflow reads no repository secrets and
+# passes no environment variables into the build beyond the public base path.
+# The build is a static client-only bundle: there is no server, no API key, and
+# no client data of any kind. All workspace data a visitor creates stays in
+# their own browser's IndexedDB, encrypted, and is never uploaded anywhere.
+#
+# The published build is labelled in-app as a fictional / de-identified beta
+# that is NOT approved for real client information (PHI).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a half-finished deployment; queue instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build static site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build with the GitHub Pages base path
+        # DEPLOY_TARGET switches vite's base to /Cockpit-therapist/ and turns on
+        # the permanent public-demonstration banner.
+        run: npm run build:pages
+
+      - name: Verify the built base path and public labelling
+        run: node scripts/verify-pages-build.mjs
+
+      - name: Install Chromium for the deployment test
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      - name: Verify the deployed shape in a real browser
+        # Serves dist/ exactly as Pages does (repo subpath + 404.html fallback)
+        # and checks nested-route refresh, the public labelling, and that the
+        # page makes no outbound request to any external host.
+        run: npm run test:pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Report the published address
+        run: echo "Published to ${{ steps.deployment.outputs.page_url }}"

@@ -10,6 +10,15 @@ Nothing becomes part of the official record without clinician review, and using 
 alone does not make a practice HIPAA-compliant — compliance also depends on policies,
 infrastructure, agreements, and legal review.
 
+## Try it
+
+**https://mirnova6.github.io/Cockpit-therapist/** — public demonstration build.
+
+**Fictional or fully de-identified data only. Not approved for real client
+information (PHI).** There is no server: everything you enter is AES-256-GCM
+encrypted and stays in your own browser on your own device. Deployment details:
+`docs/release/GITHUB_PAGES.md`.
+
 ## Build status
 
 | Phase | Scope | Status |
