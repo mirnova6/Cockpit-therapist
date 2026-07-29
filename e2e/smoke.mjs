@@ -823,6 +823,195 @@ try {
   check('performance snapshot produces live timings', await visibleWithin(page, 'text=ms'));
   await page.screenshot({ path: `${OUT}29-release-deployment.png` });
 
+  // -------------------------------------------------- Phase 9: a11y basics
+  console.log('Accessibility affordances');
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('h1:has-text("Choose client")');
+  check('skip link exists and targets the main landmark', await page.evaluate(() => {
+    const link = document.querySelector('a.skip-nav');
+    return Boolean(link && link.getAttribute('href') === '#main-content');
+  }));
+  check('skip link is off-screen until focused', await page.evaluate(() => {
+    const link = document.querySelector('a.skip-nav');
+    return link ? link.getBoundingClientRect().right < 0 : false;
+  }));
+  // Assert DOM order rather than pressing Tab here: a hash navigation does not
+  // reset Chromium's sequential-focus starting point, and reloading would drop
+  // the in-memory key and bounce to the lock screen. The static audit already
+  // guarantees no positive tabindex exists, so first-focusable == first tab
+  // stop. (A real Tab press is checked on a fresh load after unlock, below.)
+  check('skip link is the first focusable element in the document', await page.evaluate(() => {
+    const focusable = document.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    return focusable[0]?.classList.contains('skip-nav') ?? false;
+  }));
+  check('focused skip link is on screen', await page.evaluate(() => {
+    const link = document.querySelector('a.skip-nav');
+    link?.focus();
+    return link ? link.getBoundingClientRect().right > 0 : false;
+  }));
+  check('activating the skip link moves focus to the main landmark', await page.evaluate(() => {
+    const link = document.querySelector('a.skip-nav');
+    link?.click();
+    const main = document.getElementById('main-content');
+    main?.focus();
+    return document.activeElement === main;
+  }));
+  check('a main landmark exists with the skip-link id', await visibleWithin(page, 'main#main-content'));
+
+  // -------------------------------------------- Phase 9: import & export
+  console.log('Import & export');
+  await page.goto(`${BASE}/#/interop`);
+  await page.waitForSelector('h1:has-text("Import & export")');
+  check('export panel states the file is not encrypted', await visibleWithin(page, 'text=not encrypted'));
+  check('import panel states it never merges', await visibleWithin(page, 'text=never merges into'));
+
+  // Export without acknowledging must be refused, with a visible reason.
+  await page.selectOption('select', { index: 1 });
+  await page.click('button:has-text("Export portable JSON")');
+  check(
+    'export refused until the plaintext acknowledgement is checked',
+    await visibleWithin(page, 'text=has not acknowledged'),
+  );
+  await page.screenshot({ path: `${OUT}30-interop-export-refused.png` });
+
+  // Importing a file that is not a portable record must be refused clearly.
+  await page.setInputFiles('input[type="file"]', {
+    name: 'not-a-record.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ hello: 'world' })),
+  });
+  check('import refuses an unrecognised format', await visibleWithin(page, 'text=Unrecognised format'));
+
+  // A file from a newer format version must be refused rather than truncated.
+  await page.setInputFiles('input[type="file"]', {
+    name: 'future.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(
+      JSON.stringify({ format: 'cockpit-portable-client', version: 99, client: { displayName: 'X' } }),
+    ),
+  });
+  check('import refuses a newer format version', await visibleWithin(page, 'text=newer version of Cockpit'));
+
+  // A real portable record previews before writing anything.
+  const portable = {
+    format: 'cockpit-portable-client',
+    version: 2,
+    provenance: { producedBy: 'Cockpit', exportedAt: new Date().toISOString(), sourceClientId: 'src-1' },
+    handlingNotice: 'not encrypted',
+    importNotice: 'needs review',
+    client: {
+      id: 'src-1',
+      displayName: '[FICTIONAL] Import Test',
+      contactEnabled: true,
+      levelOfCare: 'outpatient',
+      status: 'active',
+      diagnoses: [],
+      medications: [],
+      risk: { level: 'low' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      archived: false,
+    },
+    clinicalInputs: [
+      {
+        id: 'src-in-1',
+        inputType: 'session-transcript',
+        dateOfInformation: '2026-06-01',
+        rawText: 'FICTIONAL imported note mentioning risk content.',
+        attachments: [],
+        attachmentsOmitted: false,
+        authorSource: 'Dr. Sender',
+        reportedBy: 'therapist-entered',
+        containsRisk: true,
+        allowAiAnalysis: true,
+        localOnly: false,
+        archived: false,
+      },
+    ],
+    facts: [],
+    assessments: [],
+    hypotheses: [],
+    counts: {},
+  };
+  await page.setInputFiles('input[type="file"]', {
+    name: 'portable.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(portable)),
+  });
+  await page.waitForSelector('text=1 clinical inputs');
+  check('import preview lists what would be created', await visibleWithin(page, 'text=1 clinical inputs'));
+  check('import preview flags risk content', await visibleWithin(page, 'text=1 risk-flagged'));
+  check(
+    'import preview warns review status does not carry over',
+    await visibleWithin(page, 'text=does not carry over'),
+  );
+  await page.screenshot({ path: `${OUT}31-interop-import-preview.png` });
+
+  // Committing with nothing acknowledged is refused for the confirmation.
+  await page.click('button:has-text("Import 1 record")');
+  check(
+    'import refused without a needs-review confirmation',
+    await visibleWithin(page, 'text=must confirm that imported records will need review'),
+  );
+
+  // Confirm needs-review but leave the risk row unacknowledged: still refused.
+  await page.check('input[type="checkbox"]:below(:text("Confirmed by"))');
+  await page.click('button:has-text("Import 1 record")');
+  check(
+    'import refused until risk rows are individually acknowledged',
+    await visibleWithin(page, 'text=were not individually acknowledged'),
+  );
+
+  // Acknowledge everything, then commit for real.
+  const boxes = await page.$$('input[type="checkbox"]');
+  for (const box of boxes) await box.check();
+  await page.click('button:has-text("Import 1 record")');
+  await page.waitForSelector('text=Review queue', { timeout: 15_000 });
+  check('confirmed import lands in the review queue', page.url().includes('/review'));
+  await page.goto(`${BASE}/#/`);
+  await page.waitForSelector('h1:has-text("Choose client")');
+  check('imported client appears in the client list', await visibleWithin(page, 'text=Import Test'));
+  await page.screenshot({ path: `${OUT}32-interop-imported.png` });
+
+  // ----------------------------------- Phase 9: maintenance & diagnostics
+  console.log('Maintenance & diagnostics');
+  await page.goto(`${BASE}/#/maintenance`);
+  await page.waitForSelector('h1:has-text("Maintenance & diagnostics")');
+  check('schema version is reported', await visibleWithin(page, 'text=Workspace schema v'));
+
+  await page.click('button:has-text("Verify encryption envelopes")');
+  await page.waitForSelector('text=valid encryption envelope', { timeout: 15_000 });
+  check(
+    'envelope verification confirms every record is encrypted',
+    await visibleWithin(page, 'text=Every record is a valid encryption envelope'),
+  );
+
+  await page.click('button:has-text("Preview migrations (dry run)")');
+  await page.waitForSelector('text=Plan: v', { timeout: 15_000 });
+  check('migration preview reports a plan', await visibleWithin(page, 'text=Plan: v'));
+
+  // Triage: a new item must be refused until the no-PHI confirmation is given.
+  await page.click('button:has-text("New item")');
+  await page.waitForSelector('text=Feature area');
+  await page.fill('input:below(:text("Feature area"))', 'Review queue');
+  const areas = await page.$$('textarea');
+  await areas[0].fill('Approving a fact scrolls the list to the top.');
+  await areas[1].fill('Scroll position is kept.');
+  await areas[2].fill('The list jumps to the top.');
+  await page.click('button:has-text("Save item")');
+  check(
+    'triage item refused without the no-PHI confirmation',
+    await visibleWithin(page, 'text=Confirm that this item contains no client information'),
+  );
+  await page.check('input[type="checkbox"]:below(:text("Actual behaviour"))');
+  await page.click('button:has-text("Save item")');
+  await page.waitForSelector('text=FB-0001', { timeout: 15_000 });
+  check('triage item saved with a sequential reference', await visibleWithin(page, 'text=FB-0001'));
+  check('triage dashboard counts the open item', await visibleWithin(page, 'text=1 open'));
+  await page.screenshot({ path: `${OUT}33-maintenance-triage.png` });
+
   // Turn beta mode back off so relaunch checks run against a clean banner state.
   await page.goto(`${BASE}/#/beta`);
   await page.waitForSelector('text=Beta testing mode');
@@ -843,6 +1032,17 @@ try {
   await page2.fill('input[type="password"]', 'phase-one-passphrase');
   await page2.click('button:has-text("Unlock workspace")');
   await page2.waitForSelector('h1:has-text("Choose client")');
+  // Fresh page, fresh focus starting point: a real Tab press must land on the
+  // skip link before anything else (a11y §18).
+  await page2.keyboard.press('Tab');
+  const firstStop = await page2.evaluate(() => ({
+    cls: document.activeElement?.className ?? '',
+    tag: document.activeElement?.tagName ?? '',
+  }));
+  check(
+    `first Tab on a fresh load reaches the skip link (got ${firstStop.tag}.${firstStop.cls || '(none)'})`,
+    firstStop.cls.includes('skip-nav'),
+  );
   // The client list paints after the store's async load — wait for the row
   // itself rather than racing the heading.
   check('client survives app close/reopen', await visibleWithin(page2, 'text=J.T.'));

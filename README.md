@@ -22,6 +22,7 @@ infrastructure, agreements, and legal review.
 | **6 — Packaging & production hardening** | Platform-detection seam, durable file-backed encrypted storage adapter (native), OS-level secure key storage for device unlock (no recovery backdoor), browser→native migration path, backup v2 with SHA-256 integrity + inspect/dry-run/no-partial-restore, in-app guides (packaging, storage, migration, device testing, security review, production blockers, online-proxy plan, PDF-ingestion plan), honest processing-status indicator, local-AI setup guide with real readiness check, Tauri/Capacitor shell skeletons | ✅ **Complete & tested** |
 | **7 — Security, HIPAA-conscious readiness & governance** | HIPAA-conscious readiness dashboard, Real PHI Readiness Gate (default blocked, 15 gates, named final approval), security review packet + data-flow map (no secrets/PHI), threat model (15 threats), editable/exportable policy & disclosure drafts (retention, deletion, backup, incident response, device, AI review, consent template, clinical disclaimer), AI vendor/BAA review with named reviewer gating online PHI at the gateway | ✅ **Complete & tested** |
 | **8 — Beta, native packaging execution & deployment prep** | Real Tauri desktop project + Capacitor mobile config (code/config complete, build blockers documented), completed web-side FileStore/keystore bridges, honest runtime-environment indicator, Beta Testing Mode (banner, sample fictional workspace, guided checklist, PHI-free bug reporting, feedback, exportable beta report), release checklist, deployment decision report (defaults to fictional-data beta), performance/stress suite | ✅ **Complete & tested (native binaries pending toolchain)** |
+| **9 — Enhancements, scaling & product maturity** | Hybrid lexical+semantic retrieval with honest mode reporting, dependency-free DOCX/PDF text extraction + review-gated OCR seam, organizations/workspaces/RBAC + supervision workflow, evaluation regression runner, secure online-proxy reference implementation, CI + secret scan, accessibility hardening with automated contrast + JSX audits, measured performance work (retrieval 2.2×, warm reads 6.8×), schema migrations with dry-run and integrity checks, PHI-free diagnostics, structured beta-feedback triage, import/export interoperability with preview + per-record confirmation | ✅ **Complete & tested** |
 
 Per the build standard, there are **no placeholder buttons or simulated features** —
 everything visible in the UI works today. Where a later-phase concept already needs
@@ -416,6 +417,77 @@ never simulated as working.
   large transcripts, and native-mode backup/restore with a large workspace, plus a live
   performance snapshot on the current workspace.
 
+## What works in Phase 9
+
+Phase 9 is the final enhancement phase. It adds **no new clinical reasoning**,
+rewrites none of the Phase 1–8 systems, and changes nothing about the app's
+readiness posture: the Real PHI Readiness Gate is still blocked by default and
+the app still makes no compliance claim.
+
+- **Hybrid retrieval** — lexical, semantic and metadata score components under
+  configurable weights. Semantic ranking is used **only** when a real embedding
+  provider is active and has produced vectors for the candidates; otherwise the
+  app downgrades to pure lexical and shows the reason in the retrieval debug
+  panel. It never claims a semantic ranking it did not perform. Client and
+  tenant isolation are re-verified on every retrieval.
+- **Local document text extraction** — DOCX and PDF, with **no added
+  dependencies** (ZIP + `DecompressionStream`, `FlateDecode` + text operators).
+  Extraction reports its method (`direct` / `ocr` / `manual` / `partial` /
+  `failed`) and never returns empty text as if it had succeeded.
+- **OCR seam, not an OCR engine** — nothing is bundled. OCR is off by default,
+  the null provider refuses honestly when called, and low-confidence output is
+  flagged for clinician review rather than accepted.
+- **Organizations, workspaces, RBAC and supervision** — 7 roles, 16 permissions,
+  service-layer tenant isolation. The `support` role has no clinical permissions
+  at all. Supervision notes are excluded from the clinical record by default.
+  Single-clinician mode (the default) is unchanged.
+- **Evaluation regression runs** — compares a run against a stored baseline;
+  risk and isolation failures are capped at zero and always fail the run.
+- **Secure online-AI proxy reference implementation** (`proxy/`) — kill-switch-first
+  request evaluation, rate limiting, metadata-only logging, sanitized provider
+  errors. It is a **reference, not a deployed service**, and it does not make
+  online PHI permissible; the Phase 7 gate still governs that.
+- **Accessibility** — skip navigation, real focus traps in dialogs, Escape on the
+  mobile navigation sheet, a visible focus ring, 44px touch targets on coarse
+  pointers, reduced-motion support, and three palette tokens darkened to reach
+  WCAG AA. `src/core/a11y/` runs contrast arithmetic against tokens parsed out of
+  `theme.css` plus an 8-rule static JSX audit, and the suite proves the auditor
+  is not vacuous by asserting it detects every rule on a broken fixture.
+  **No screen-reader testing and no independent audit have been done** — stated
+  as blockers in `docs/phase9/ACCESSIBILITY.md`, along with a manual checklist.
+- **Measured performance work** — lexical ranking 459ms → 205ms (2.2×) on a
+  400-document corpus, and warm client reads 58ms → 8.5ms (6.8×) at 30 clients /
+  750 inputs via a session-scoped plaintext cache in `EncryptedStore`. The cache
+  holds only strings (never shared objects), is bounded, never persists, dies
+  with the session, and is cleared explicitly on lock. Equivalence is pinned by
+  tests — rankings are compared against the pre-optimization scorer, the stemmer
+  is fuzzed against the regex it replaced, and work-avoided is proven by counting
+  real AES-GCM calls rather than by timing.
+- **Schema migrations** — dry-run by default, a workspace from a newer build is
+  refused rather than partially interpreted, every record is validated as an
+  encryption envelope before and after, and a migration that would lose a record
+  aborts.
+- **PHI-free diagnostics** — operational events with no field capable of holding
+  clinical text, prompts, output or keys; sanitized codes, opaque client
+  references, and an export that refuses without a no-PHI confirmation.
+- **Structured beta-feedback triage** — 15 categories, 9 statuses, severities,
+  priorities and a dashboard covering open blockers and regression candidates.
+  The no-PHI confirmation is enforced in the repository, not just the form.
+- **Import & export interoperability** (`/interop`) — a versioned portable client
+  record, a readable Markdown rendering, and an assessment-score CSV. Export
+  refuses without an explicit acknowledgement that the file is unencrypted plain
+  text, excludes local-only records by default, drops facts that would lose their
+  provenance, carries attachment metadata but never bytes, and strips secrets
+  recursively. Import is preview-then-commit: it shows every record and every
+  review downgrade, and requires a named clinician, a needs-review
+  acknowledgement, and **individual acknowledgement of each risk-flagged
+  record**. Review status, AI-analysis consent and the sending clinician's risk
+  sign-off never transfer, and an import always creates a new client rather than
+  merging.
+- **CI** — typecheck, unit tests, build and a secret scan on every push.
+
+Full detail: `docs/phase9/README.md` and `docs/phase9/ACCESSIBILITY.md`.
+
 ## Security model
 
 - All records and attachments are encrypted at rest with **AES-256-GCM**.
@@ -478,34 +550,50 @@ shells implement, plus example native configs under `native/`.
 ```
 src/
   core/                    platform-agnostic domain layer (no React imports)
+    a11y/                  Phase 9 WCAG contrast arithmetic + static JSX accessibility
+                           audit (both run over the real sources in the test suite)
     crypto/                WebCrypto AES-GCM + PBKDF2 key wrapping + raw wrapping keys
     platform/              platform detection, capabilities, native bridges, bootstrap
     storage/               StorageAdapter interface + IndexedDB impl + file-backed
-                           adapter (native) + EncryptedStore
+                           adapter (native) + EncryptedStore (Phase 9: session-scoped
+                           plaintext cache keyed by record IV) + schema migrations
     db/                    schemas + ClinicalDatabase repositories (Phases 1–4:
                            structured, documents, intelligence, AI, knowledge)
     assessments/           assessment definitions with cited official scoring rules
     extraction/            ExtractionProvider seam: rule-based + AI providers
-    documents/             DocumentGenerationProvider seam: template + AI providers
+    documents/             DocumentGenerationProvider seam: template + AI providers;
+                           Phase 9 extraction/ (dependency-free DOCX + PDF text
+                           extraction, OcrProvider seam with no bundled engine)
     ai/                    ClinicalAIProvider seam, gateway (consent/isolation/logging/
                            cancellation, kill switch, registry enforcement), Anthropic +
                            local transports, redaction, prompt assembly, claim verification
-    rag/                   deterministic lexical client-record retrieval + debug
+    rag/                   deterministic lexical client-record retrieval + debug;
+                           Phase 9 hybrid scoring (lexical/semantic/metadata) with
+                           honest mode downgrade when semantics are unavailable
     knowledge/             clinician-managed knowledge base (chunking, approval,
                            retrieval with citation preservation)
     pipeline/              20-step Analyze-and-Update reasoning pipeline
     eval/                  Phase 5 evaluation harness: fictional cases, metrics,
-                           trap evaluators, ephemeral sandbox, task runners
+                           trap evaluators, ephemeral sandbox, task runners;
+                           Phase 9 regression runner + baseline comparison
     governance/            provider approval registry + vendor/BAA review, readiness
                            checklist, production readiness report, embedding records,
                            Phase 7: threat model, policy drafts, Real PHI readiness gate,
                            security review packet + data-flow map assemblers; Phase 8
                            release checklist persistence
     beta/                  Phase 8 beta mode: state, sample fictional data, guided
-                           checklist, PHI-free bug reports, feedback, beta report
+                           checklist, PHI-free bug reports, feedback, beta report;
+                           Phase 9 structured feedback triage + repository
+    interop/               Phase 9 portable client record: export (plaintext
+                           acknowledgement, secret stripping, Markdown + CSV) and
+                           import (parse → preview → confirmed commit)
+    observability/         Phase 9 PHI-free diagnostic events + confirmed export
+    org/                   Phase 9 organizations, workspaces, users, memberships,
+                           RBAC (7 roles / 16 permissions), supervision workflow
     release/               Phase 8 build metadata, release checklist schema,
                            deployment decision report
-    perf/                  Phase 8 performance harness + stress helpers
+    perf/                  Phase 8 performance harness + stress helpers; Phase 9
+                           optimization equivalence tests (decrypt-call counting)
     embeddings/            EmbeddingProvider seam + embedding service (semantic
                            retrieval preparation)
     formulation/           10-framework living case-formulation engine + diffing
@@ -525,12 +613,17 @@ src/
                            packet, data-flow map, threat model, policy drafts
     features/beta/         Phase 8 beta testing mode screen
     features/release/      Phase 8 release checklist + deployment decision screen
+    features/interop/      Phase 9 import & export screen
+    features/maintenance/  Phase 9 triage, migrations & diagnostics screen
 docs/phase6/               8 offline planning docs (bundled into the app at /guides)
 docs/phase7/               Phase 7 governance overview (readiness materials live in-app)
 docs/phase8/               Phase 8 overview + real-device testing checklist (in /guides)
+docs/phase9/               Phase 9 overview + accessibility record & manual checklist
+proxy/                     Phase 9 secure online-AI proxy REFERENCE implementation
+                           (policy engine, rate limiting, metadata-only logging)
 native/tauri/              real Tauri 2 desktop project (src-tauri: Cargo, conf, main.rs)
 native/capacitor/          real Capacitor mobile config
-e2e/smoke.mjs              browser-level end-to-end verification (150 checks)
+e2e/smoke.mjs              browser-level end-to-end verification (175 checks)
 e2e/repeat.mjs             runs the whole E2E suite N times (default 20) for
                            flake detection; supports E2E_PARALLEL
 ```
@@ -546,7 +639,7 @@ and AI/RAG components consume the same repositories without touching the UI laye
 ```bash
 npm install
 npm run dev          # local dev server
-npm test             # 266 unit tests: crypto, auth, repositories, structured data,
+npm test             # 472 unit tests: crypto, auth, repositories, structured data,
                      # extraction rules, assessment scoring, documents, backup,
                      # AI gateway/consent/isolation, RAG, knowledge base, verification,
                      # pipeline, formulation, interventions, assistant, evaluation
@@ -555,10 +648,15 @@ npm test             # 266 unit tests: crypto, auth, repositories, structured da
                      # integrity, storage performance + browser→native migration,
                      # Phase 7 PHI-gate / packet / data-flow / policy / threat-model,
                      # Phase 8 beta mode / PHI-free bug reports / release + deployment /
-                     # 50-client stress / native-mode backup-restore / runtime indicator
+                     # 50-client stress / native-mode backup-restore / runtime indicator,
+                     # Phase 9 hybrid retrieval / document extraction + OCR seam /
+                     # org + RBAC + supervision / eval regression / proxy policy /
+                     # feedback triage / schema migrations / diagnostics /
+                     # WCAG contrast + static a11y audit / performance equivalence /
+                     # import-export interoperability
 npm run typecheck    # strict TS
 npm run build        # production build
-npm run test:e2e     # 150-check browser E2E: setup → clients → risk review →
+npm run test:e2e     # 175-check browser E2E: setup → clients → risk review →
                      # extraction → profile → assessments → documents → AI settings →
                      # knowledge → formulation → interventions → assistant →
                      # Analyze-and-Update → evaluation harness → audit/ops viewers →
@@ -566,7 +664,9 @@ npm run test:e2e     # 150-check browser E2E: setup → clients → risk review 
                      # local-AI guide → guides/checklists → backup restore preview →
                      # HIPAA-conscious governance (PHI gate, packet, data-flow, threats,
                      # policies, vendor/BAA) → beta mode / bug reports / release &
-                     # deployment → relaunch → encrypted-at-rest check
+                     # deployment → accessibility affordances → import/export preview
+                     # + refusals → maintenance (migrations, envelopes, triage) →
+                     # relaunch → encrypted-at-rest check
 npm run test:e2e:repeat   # runs the full E2E suite 20 consecutive times (flake gate)
 ```
 

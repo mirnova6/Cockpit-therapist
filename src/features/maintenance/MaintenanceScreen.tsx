@@ -332,7 +332,10 @@ function MigrationCard() {
     setApplied(undefined);
     setBusy(true);
     try {
-      done?.(await fn());
+      // NOT `done?.(await fn())` — optional-call short-circuits its arguments,
+      // so with no `done` the operation would never run at all.
+      const result = await fn();
+      done?.(result);
     } catch (e) {
       setError(e instanceof MigrationError ? e.message : `Failed: ${(e as Error).message}`);
     } finally {
