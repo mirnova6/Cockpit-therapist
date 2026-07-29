@@ -13,6 +13,7 @@ infrastructure, agreements, and legal review.
 ## Try it
 
 **https://mirnova6.github.io/Cockpit-therapist/** — public demonstration build.
+*(Pending: GitHub Pages must be enabled once under Settings → Pages → Source: GitHub Actions before the first deploy can publish. See `docs/release/GITHUB_PAGES.md`.)*
 
 **Fictional or fully de-identified data only. Not approved for real client
 information (PHI).** There is no server: everything you enter is AES-256-GCM

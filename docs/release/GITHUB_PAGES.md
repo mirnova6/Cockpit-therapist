@@ -105,13 +105,28 @@ through 14 checks:
 - **No compliance claim.** The Real PHI Readiness Gate remains blocked by
   default and is unchanged by this deployment.
 
-## Repository setup
+## Repository setup — ONE MANUAL STEP IS REQUIRED
 
-The workflow enables Pages itself: `actions/configure-pages@v5` is called with
-`enablement: true`, which turns Pages on with `build_type=workflow` using the
-workflow's `pages: write` permission. No manual setting change should be needed.
+**Pages must be enabled by hand before the first deployment can succeed:**
 
-If that call is ever refused (for example because organization policy restricts
-who may enable Pages), the fallback is to set it by hand once:
+> **Settings → Pages → Build and deployment → Source: GitHub Actions**
 
-**Settings → Pages → Build and deployment → Source: GitHub Actions.**
+The workflow calls `actions/configure-pages@v5` with `enablement: true`, which
+attempts to turn Pages on automatically. **That attempt was tried and refused**
+on run 30485407705:
+
+```
+Get Pages site failed.    Error: Not Found
+Create Pages site failed. Error: Resource not accessible by integration
+```
+
+Creating a Pages site needs administration rights that the workflow's
+`GITHUB_TOKEN` does not carry, regardless of the `pages: write` permission in
+the workflow. `enablement: true` is left in place because it costs nothing and
+becomes a no-op once the site exists (`Get Pages site` then succeeds and no
+creation is attempted), but it cannot substitute for the manual step.
+
+Everything before that step succeeded on the same run — typecheck, 472 unit
+tests, the Pages build, the build gate, and all 14 browser deployment checks.
+Once the setting is flipped, re-run the "Deploy to GitHub Pages" workflow (or
+push any commit to `main`) and the deployment will complete.
