@@ -271,6 +271,23 @@ export function AppSettingsScreen() {
           </div>
         </Card>
 
+        <Card title="Import &amp; export" icon="download">
+          <div className="stack-sm">
+            <p className="muted small" style={{ margin: 0 }}>
+              Move one client's record between Cockpit workspaces, or produce a readable copy for a
+              clinician who does not run Cockpit. Exported files are not encrypted; imported records
+              always arrive pending review.
+            </p>
+            <button
+              className="btn btn--secondary btn--sm"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => navigate('/interop')}
+            >
+              <Icon name="download" size={14} /> Open import &amp; export
+            </button>
+          </div>
+        </Card>
+
         <DeviceStorageCard />
 
         <AiSettingsCard />

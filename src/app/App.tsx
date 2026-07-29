@@ -35,6 +35,7 @@ import { SecurityPacketScreen } from '../features/governance/SecurityPacketScree
 import { DataFlowScreen } from '../features/governance/DataFlowScreen';
 import { BetaModeScreen } from '../features/beta/BetaModeScreen';
 import { ReleaseScreen } from '../features/release/ReleaseScreen';
+import { InteropScreen } from '../features/interop/InteropScreen';
 import { BetaBanner } from './components/BetaBanner';
 import { useBetaStore } from '../state/betaStore';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
@@ -103,6 +104,7 @@ export function App() {
       <Route path="/governance/data-flow" element={<DataFlowScreen />} />
       <Route path="/release" element={<ReleaseScreen />} />
       <Route path="/beta" element={<BetaModeScreen />} />
+      <Route path="/interop" element={<InteropScreen />} />
       <Route path="/guides" element={<GuidesScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />
