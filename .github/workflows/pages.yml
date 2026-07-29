@@ -59,6 +59,7 @@ jobs:
         run: node scripts/verify-pages-build.mjs
 
       - name: Install Chromium for the deployment test
+        timeout-minutes: 10
         run: npx --yes playwright@1.61.1 install --with-deps chromium
 
       - name: Verify the deployed shape in a real browser

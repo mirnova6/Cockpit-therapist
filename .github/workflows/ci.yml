@@ -51,6 +51,7 @@ jobs:
         # through playwright-core, which resolves a browser revision specific to
         # its own version, so an unpinned `npx playwright` can install a build it
         # will not use.
+        timeout-minutes: 10
         run: npx --yes playwright@1.61.1 install --with-deps chromium
 
       - name: E2E (dynamic port per run)
@@ -78,7 +79,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - name: Install Chromium
+        timeout-minutes: 10
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
       - name: 20 consecutive E2E runs
         run: npm run test:e2e:repeat
 
