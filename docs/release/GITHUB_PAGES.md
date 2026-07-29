@@ -105,11 +105,13 @@ through 14 checks:
 - **No compliance claim.** The Real PHI Readiness Gate remains blocked by
   default and is unchanged by this deployment.
 
-## One-time repository setup
+## Repository setup
 
-The workflow needs Pages set to build from GitHub Actions:
+The workflow enables Pages itself: `actions/configure-pages@v5` is called with
+`enablement: true`, which turns Pages on with `build_type=workflow` using the
+workflow's `pages: write` permission. No manual setting change should be needed.
+
+If that call is ever refused (for example because organization policy restricts
+who may enable Pages), the fallback is to set it by hand once:
 
 **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-
-Until that is set, the `deploy` job fails with a "Pages is not enabled" error.
-It cannot be enabled from the workflow itself.
