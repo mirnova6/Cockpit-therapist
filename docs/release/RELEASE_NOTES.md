@@ -105,9 +105,6 @@ readable copy for a clinician who does not run Cockpit.
 
 **https://mirnova6.github.io/Cockpit-therapist/**
 
-*Not yet live: GitHub Pages must be enabled once in repository settings before
-the first deployment can publish. See `docs/release/GITHUB_PAGES.md`.*
-
 A public demonstration build. It carries a permanent banner stating it is for
 fictional or fully de-identified data only and is not approved for real client
 information. Everything you enter is encrypted and stays in your own browser on

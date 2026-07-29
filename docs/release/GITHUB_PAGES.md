@@ -105,28 +105,44 @@ through 14 checks:
 - **No compliance claim.** The Real PHI Readiness Gate remains blocked by
   default and is unchanged by this deployment.
 
-## Repository setup — ONE MANUAL STEP IS REQUIRED
+## Repository setup — one manual step, already done
 
-**Pages must be enabled by hand before the first deployment can succeed:**
+Pages had to be enabled by hand once:
 
 > **Settings → Pages → Build and deployment → Source: GitHub Actions**
 
+This was completed on 2026-07-29 and the first successful deployment followed
+immediately (run 30493287847).
+
 The workflow calls `actions/configure-pages@v5` with `enablement: true`, which
-attempts to turn Pages on automatically. **That attempt was tried and refused**
-on run 30485407705:
+tries to turn Pages on automatically. On the first two runs that attempt was
+**refused**:
 
 ```
 Get Pages site failed.    Error: Not Found
 Create Pages site failed. Error: Resource not accessible by integration
 ```
 
-Creating a Pages site needs administration rights that the workflow's
-`GITHUB_TOKEN` does not carry, regardless of the `pages: write` permission in
-the workflow. `enablement: true` is left in place because it costs nothing and
-becomes a no-op once the site exists (`Get Pages site` then succeeds and no
-creation is attempted), but it cannot substitute for the manual step.
+Creating a Pages site needs administration rights the workflow's `GITHUB_TOKEN`
+does not carry, regardless of the `pages: write` permission. `enablement: true`
+is kept because it is now a no-op — with the site existing, `Get Pages site`
+succeeds and no creation is attempted — and it would work if the permission
+were ever granted. It is recorded here so nobody assumes it removed the manual
+step; it did not.
 
-Everything before that step succeeded on the same run — typecheck, 472 unit
-tests, the Pages build, the build gate, and all 14 browser deployment checks.
-Once the setting is flipped, re-run the "Deploy to GitHub Pages" workflow (or
-push any commit to `main`) and the deployment will complete.
+## Deployment history
+
+| Run | Commit | Result |
+| --- | --- | --- |
+| 30485407705 | `9875459` | build green; failed at Configure Pages (site did not exist) |
+| 30485872985 | `315a6be` | same |
+| **30493287847** | **`b799367`** | **success — published** |
+
+The successful run's deploy log:
+
+```
+Created deployment for b799367cb3406cc991e1daf8146c3aafd027d4a8
+Getting Pages deployment status...
+Reported success!
+Published to https://mirnova6.github.io/Cockpit-therapist/
+```
