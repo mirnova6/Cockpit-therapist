@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Cockpit needs only its own invoke commands and the OS plugin. No broad filesystem, shell, or network capabilities are granted; all storage goes through the app-private cockpit_* commands.",
+  "windows": ["main"],
+  "permissions": ["core:default", "os:default"]
+}

@@ -1,0 +1,343 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { AuthService } from '../auth/authService';
+import { createBackup, isValidBackup, restoreBackup } from './backupService';
+
+let counter = 0;
+const services: AuthService[] = [];
+
+function makeService(dbName: string): AuthService {
+  const service = new AuthService({ dbName, iterations: 1000 });
+  services.push(service);
+  return service;
+}
+
+afterEach(async () => {
+  while (services.length) await services.pop()?.close();
+});
+
+describe('backupService', () => {
+  it('creates a backup that restores into a fresh workspace with the same passphrase', async () => {
+    const sourceName = `test-backup-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-1' });
+    const client = await sourceDb.createClient(
+      {
+        displayName: 'M.N.',
+        contactEnabled: false,
+        levelOfCare: 'php',
+        status: 'active',
+        diagnoses: [{ id: 'd1', label: 'GAD', kind: 'diagnosis' }],
+        medications: [],
+        risk: { level: 'moderate' },
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.createInput(
+      {
+        clientId: client.id,
+        inputType: 'bps',
+        dateOfInformation: '2026-07-01',
+        rawText: 'Full biopsychosocial text.',
+        authorSource: 'Dr. Osei',
+        reportedBy: 'therapist-entered',
+        containsRisk: false,
+        allowAiAnalysis: true,
+        localOnly: true,
+      },
+      [{ name: 'bps.txt', mimeType: 'text/plain', bytes: new TextEncoder().encode('doc') }],
+      'Dr. Osei',
+    );
+
+    const backup = await createBackup(sourceDb.adapter);
+    expect(isValidBackup(backup)).toBe(true);
+    // Backup must not contain plaintext PHI
+    const dump = JSON.stringify(backup.records) + JSON.stringify(backup.blobs);
+    expect(dump).not.toContain('M.N.');
+    expect(dump).not.toContain('biopsychosocial');
+
+    // Round-trip through JSON like a real file download/upload
+    const parsed = JSON.parse(JSON.stringify(backup));
+
+    const targetAuth = makeService(targetName);
+    // restore into an empty adapter (uninitialized workspace)
+    expect(await targetAuth.getStatus()).toBe('uninitialized');
+    const targetAdapter = await (async () => {
+      // Reach the adapter by asking the service for status first (opens it)
+      const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+      return IndexedDbAdapter.open(targetName);
+    })();
+    await restoreBackup(targetAdapter, parsed);
+    targetAdapter.close();
+
+    const restoredDb = await targetAuth.unlockWithPassphrase('backup-pass-1');
+    const clients = await restoredDb.listClients();
+    expect(clients).toHaveLength(1);
+    expect(clients[0].displayName).toBe('M.N.');
+    const inputs = await restoredDb.listInputsForClient(clients[0].id);
+    expect(inputs).toHaveLength(1);
+    const bytes = await restoredDb.getAttachmentBytes(inputs[0].attachments[0].id);
+    expect(new TextDecoder().decode(bytes)).toBe('doc');
+  });
+
+  it('round-trips Phase 2 structured data with relationships intact', async () => {
+    const sourceName = `test-backup-p2-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p2-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-2' });
+    const client = await sourceDb.createClient(
+      {
+        displayName: 'P.Q.',
+        contactEnabled: false,
+        levelOfCare: 'outpatient',
+        status: 'active',
+        diagnoses: [],
+        medications: [],
+        risk: { level: 'low' },
+      },
+      'Dr. Osei',
+    );
+    const input = await sourceDb.createInput(
+      {
+        clientId: client.id,
+        inputType: 'rough-notes',
+        dateOfInformation: '2026-07-01',
+        rawText: 'Client reports insomnia most nights.',
+        authorSource: 'Dr. Osei',
+        reportedBy: 'therapist-entered',
+        containsRisk: false,
+        allowAiAnalysis: true,
+        localOnly: true,
+      },
+      [],
+      'Dr. Osei',
+    );
+    const fact = await sourceDb.structured.createFact(
+      {
+        clientId: client.id,
+        sourceInputId: input.id,
+        sourceInputVersion: 1,
+        category: 'sleep',
+        statement: 'Insomnia most nights',
+        excerpt: 'Client reports insomnia most nights.',
+        dateRecorded: '2026-07-01',
+        classification: 'client-report',
+        extractionMethod: 'manual',
+        extractionConfidence: 'high',
+        temporalStatus: 'current',
+        riskRelated: false,
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.structured.decideFact(fact.id, 'approve', 'Dr. Osei');
+    await sourceDb.structured.createAssessment(
+      { clientId: client.id, definitionKey: 'phq9', name: 'PHQ-9', dateAdministered: '2026-07-01', totalScore: 9 },
+      'Dr. Osei',
+    );
+    // Phase 3 records ride the same encrypted envelope format.
+    const goal = await sourceDb.documents.createGoal(
+      { clientId: client.id, kind: 'short-term', title: 'Sleep goal', status: 'active', objectives: [] },
+      'Dr. Osei',
+    );
+    const note = await sourceDb.documents.createDapNote(
+      {
+        clientId: client.id,
+        sessionDate: '2026-07-01',
+        levelOfCare: 'outpatient',
+        style: 'standard',
+        segments: [
+          { id: 's1', section: 'data', text: 'Backup segment content', kind: 'therapist-authored', sources: [], riskRelated: false },
+        ],
+        sourceSelection: {
+          inputIds: [input.id], factIds: [], assessmentIds: [], hypothesisIds: [], goalIds: [goal.id],
+          includeDiagnoses: true, includeMedications: false, includeRiskStatus: false, riskConfirmed: false,
+          explicitlyIncludedPendingFactIds: [], style: 'standard',
+        },
+        generation: {
+          method: 'deterministic-template', providerId: 'deterministic-template',
+          providerLabel: 'Deterministic Template Generator', generatedAt: '2026-07-01T00:00:00Z',
+          disclosure: 'test', warnings: [],
+        },
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.documents.decideDapNote(note.id, 'approve', 'Dr. Osei');
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    const dump = JSON.stringify(backup.records);
+    expect(dump).not.toContain('Insomnia');
+
+    const targetAuth = makeService(targetName);
+    expect(await targetAuth.getStatus()).toBe('uninitialized');
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-2');
+    const restoredClient = (await restored.listClients())[0];
+    const facts = await restored.structured.listFacts(restoredClient.id);
+    expect(facts).toHaveLength(1);
+    expect(facts[0].reviewStatus).toBe('approved');
+    const evidence = await restored.structured.listEvidence(restoredClient.id, {
+      type: 'fact',
+      id: facts[0].id,
+    });
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].sourceInputId).toBe(facts[0].sourceInputId);
+    const assessments = await restored.structured.listAssessments(restoredClient.id);
+    expect(assessments[0].severityInterpretation).toContain('Mild');
+    const versions = await restored.structured.listVersions(restoredClient.id, 'fact', facts[0].id);
+    expect(versions.length).toBeGreaterThanOrEqual(1);
+
+    // Phase 3 relationships intact after restore
+    const restoredGoals = await restored.documents.listGoals(restoredClient.id);
+    expect(restoredGoals.map((g) => g.title)).toEqual(['Sleep goal']);
+    const restoredNotes = await restored.documents.listDapNotes(restoredClient.id);
+    expect(restoredNotes).toHaveLength(1);
+    expect(restoredNotes[0].reviewStatus).toBe('approved');
+    expect(restoredNotes[0].sourceSelection.goalIds).toEqual([restoredGoals[0].id]);
+    expect(restoredNotes[0].segments[0].text).toBe('Backup segment content');
+    // …and never in plaintext inside the backup
+    expect(dump).not.toContain('Backup segment content');
+  });
+
+  it('rejects invalid backup files', async () => {
+    expect(isValidBackup(null)).toBe(false);
+    expect(isValidBackup({})).toBe(false);
+    expect(isValidBackup({ format: 'something-else', version: 1 })).toBe(false);
+  });
+
+  it('round-trips Phase 4 records (AI settings, knowledge, formulations) in the same format', async () => {
+    const sourceName = `test-backup-p4-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p4-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-4' });
+    const client = await sourceDb.createClient(
+      {
+        displayName: 'R.S.',
+        contactEnabled: false,
+        levelOfCare: 'outpatient',
+        status: 'active',
+        diagnoses: [],
+        medications: [],
+        risk: { level: 'low' },
+      },
+      'Dr. Osei',
+    );
+    await sourceDb.ai.saveSettings({ onlineApiKey: 'sk-ant-backup-secret', onlineEnabled: false }); // secret-scan-allow: fixture value, not a real secret
+    const knowledge = await sourceDb.knowledge.createSource(
+      {
+        title: 'MI Manual',
+        topic: 'motivational interviewing',
+        sourceType: 'treatment-manual',
+        citationDetails: 'Miller & Rollnick (2013).',
+        allowedUses: [],
+        excludedUses: [],
+      },
+      'Ambivalence is the central working material of motivational interviewing.',
+      'Dr. Osei',
+    );
+    await sourceDb.knowledge.setStatus(knowledge.id, 'approved', 'Dr. Osei');
+    await sourceDb.intelligence.proposeFormulation(
+      {
+        clientId: client.id,
+        framework: 'biopsychosocial',
+        sections: [],
+        areasNeedingAssessment: [],
+        updateReason: 'test',
+        generation: {
+          providerType: 'deterministic',
+          providerId: 'deterministic',
+          generatedAt: '2026-07-10T00:00:00Z',
+          disclosure: 'test',
+        },
+      },
+      'Dr. Osei',
+    );
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    const dump = JSON.stringify(backup.records);
+    // Never plaintext: not the API key, not knowledge text, not PHI.
+    expect(dump).not.toContain('sk-ant-backup-secret');
+    expect(dump).not.toContain('Ambivalence');
+
+    const targetAuth = makeService(targetName);
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-4');
+    const settings = await restored.ai.getSettings();
+    expect(settings.onlineApiKey).toBe('sk-ant-backup-secret');
+    expect(settings.onlineEnabled).toBe(false);
+    const sources = await restored.knowledge.listSources();
+    expect(sources).toHaveLength(1);
+    expect(sources[0].status).toBe('approved');
+    expect((await restored.knowledge.listChunks(sources[0].id)).length).toBeGreaterThan(0);
+    const restoredClient = (await restored.listClients())[0];
+    expect(await restored.intelligence.listFormulations(restoredClient.id)).toHaveLength(1);
+  });
+
+  it('round-trips Phase 5 records (eval runs, approvals, checklist)', async () => {
+    const sourceName = `test-backup-p5-src-${Date.now()}-${counter++}`;
+    const targetName = `test-backup-p5-dst-${Date.now()}-${counter++}`;
+
+    const sourceAuth = makeService(sourceName);
+    const sourceDb = await sourceAuth.setup({ name: 'Dr. Osei', passphrase: 'backup-pass-5' });
+    await sourceDb.evaluation.saveRun({
+      caseId: 'fict-01-aud-ambivalence',
+      caseTitle: 'Severe alcohol use disorder with ambivalence and relapse triggers',
+      caseSource: 'built-in',
+      taskType: 'extraction',
+      providerType: 'deterministic',
+      providerId: 'deterministic',
+      modelId: 'none',
+      startedAt: '2026-07-20T00:00:00Z',
+      finishedAt: '2026-07-20T00:00:01Z',
+      durationMs: 1000,
+      status: 'completed',
+      outputPreview: 'FICTIONAL-OUTPUT vodka nights',
+      qualityChecks: [],
+      trapResults: [],
+      errors: [],
+      score: 90,
+      phiLeftDevice: false,
+    });
+    await sourceDb.governance.saveApproval(
+      {
+        providerId: 'anthropic-online',
+        providerName: 'Anthropic',
+        providerType: 'online',
+        model: 'claude-sonnet-5',
+        approvalStatus: 'approved',
+        baaStatus: 'signed',
+        approvedPurposes: [],
+        disallowedPurposes: [],
+      },
+      'Dr. Osei',
+    );
+    const checklist = await sourceDb.governance.listChecklist();
+    await sourceDb.governance.updateChecklistItem(checklist[0].id, { status: 'reviewed' }, 'Dr. Osei');
+
+    const backup = JSON.parse(JSON.stringify(await createBackup(sourceDb.adapter)));
+    // Even fictional eval output is stored encrypted.
+    expect(JSON.stringify(backup.records)).not.toContain('FICTIONAL-OUTPUT');
+
+    const targetAuth = makeService(targetName);
+    const { IndexedDbAdapter } = await import('../storage/indexedDbAdapter');
+    const targetAdapter = await IndexedDbAdapter.open(targetName);
+    await restoreBackup(targetAdapter, backup);
+    targetAdapter.close();
+
+    const restored = await targetAuth.unlockWithPassphrase('backup-pass-5');
+    expect(await restored.evaluation.listRuns()).toHaveLength(1);
+    expect((await restored.governance.listApprovals())[0].approvalStatus).toBe('approved');
+    const restoredChecklist = await restored.governance.listChecklist();
+    expect(restoredChecklist.some((i) => i.status === 'reviewed')).toBe(true);
+  });
+});

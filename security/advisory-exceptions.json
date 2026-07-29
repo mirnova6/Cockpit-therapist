@@ -1,0 +1,80 @@
+{
+  "$comment": [
+    "Reviewed dependency-advisory exceptions (Phase 9, \u00a717).",
+    "",
+    "An entry here does NOT mean the advisory is false. It means a human read it,",
+    "checked whether the vulnerable code path exists in Cockpit's configuration, and",
+    "recorded the reasoning. `scripts/audit-deps.mjs` fails on any advisory that is",
+    "not listed here, so a new advisory always blocks CI until someone reviews it.",
+    "",
+    "Every entry must state: the advisory id, whether it affects shipped code or only",
+    "the development toolchain, why it is not reachable here, what would make it",
+    "reachable again, who reviewed it and when. Entries expire \u2014 an expired entry",
+    "fails the build the same as an unknown advisory."
+  ],
+  "reviewedBy": "Cockpit maintainer",
+  "reviewedOn": "2026-07-29",
+  "expiresOn": "2026-10-29",
+  "exceptions": [
+    {
+      "id": "GHSA-qwww-vcr4-c8h2",
+      "package": "react-router",
+      "severity": "high",
+      "shipped": true,
+      "title": "RSC Mode CSRF bypass allows action execution before 400 response",
+      "whyNotReachable": "The vulnerable code path is React Server Components mode. Cockpit is a purely client-side SPA: it mounts HashRouter in the browser, has no server, no RSC, no route actions and no loaders. None of the affected code executes.",
+      "wouldBecomeReachableIf": "The app adopts React Router framework/RSC mode, route actions, or server-side rendering.",
+      "alternativesConsidered": "Downgrading to react-router-dom 7.11.0 clears this advisory but re-enters GHSA-wrjc-x8rr-h8h6 and GHSA-337j-9hxr-rhxg (<=7.17.0), whose affected code (Link/useNavigate redirect handling) the app DOES execute. No published version is currently free of all three, so the app sits on the version whose affected code it cannot reach at all."
+    },
+    {
+      "id": "GHSA-67mh-4wv8-2f99",
+      "package": "esbuild",
+      "severity": "moderate",
+      "shipped": false,
+      "title": "esbuild dev server allows any website to send requests and read responses",
+      "whyNotReachable": "Affects the Vite/esbuild development server only. It is not part of the production bundle and never runs on a clinician's machine. CI never starts a dev server; E2E uses `vite preview` against built assets.",
+      "wouldBecomeReachableIf": "A developer runs `npm run dev` on an untrusted network while browsing untrusted sites.",
+      "alternativesConsidered": "The only fix is vite@8 (major). Tracked as toolchain work rather than taken as a drive-by upgrade at the end of Phase 9."
+    },
+    {
+      "id": "GHSA-4w7w-66w2-5vf9",
+      "package": "vite",
+      "severity": "high",
+      "shipped": false,
+      "title": "Path traversal in optimized deps `.map` handling",
+      "whyNotReachable": "Development-server code path. Not present in the production build; not exercised by CI or by the packaged app.",
+      "wouldBecomeReachableIf": "A Vite dev server is exposed to an untrusted network.",
+      "alternativesConsidered": "Fix requires vite@8 (major). Tracked as toolchain work."
+    },
+    {
+      "id": "GHSA-v6wh-96g9-6wx3",
+      "package": "vite",
+      "severity": "high",
+      "shipped": false,
+      "title": "launch-editor NTLMv2 hash disclosure via UNC path handling on Windows",
+      "whyNotReachable": "Development-server error-overlay dependency, Windows-only, dev-time only. Not in the production bundle.",
+      "wouldBecomeReachableIf": "A developer runs the Vite dev server on Windows and opens a crafted error overlay link.",
+      "alternativesConsidered": "Fix requires vite@8 (major). Tracked as toolchain work."
+    },
+    {
+      "id": "GHSA-fx2h-pf6j-xcff",
+      "package": "vite",
+      "severity": "high",
+      "shipped": false,
+      "title": "`server.fs.deny` bypass on Windows alternate paths",
+      "whyNotReachable": "Development-server file-serving policy. Not in the production bundle; the packaged app serves no files over HTTP.",
+      "wouldBecomeReachableIf": "A Vite dev server is exposed to an untrusted network on Windows.",
+      "alternativesConsidered": "Fix requires vite@8 (major). Tracked as toolchain work."
+    },
+    {
+      "id": "GHSA-5xrq-8626-4rwp",
+      "package": "vitest",
+      "severity": "critical",
+      "shipped": false,
+      "title": "Vitest UI server allows arbitrary file read and execution while listening",
+      "whyNotReachable": "Requires the Vitest UI server to be running. Cockpit never starts it: `npm test` runs `vitest run` (non-watch, no UI), and @vitest/ui is not a dependency. The vulnerable server is never listening.",
+      "wouldBecomeReachableIf": "Someone installs @vitest/ui and runs `vitest --ui`.",
+      "alternativesConsidered": "Fix requires vitest@4 (major), which also forces vite@8. Tracked as toolchain work."
+    }
+  ]
+}
