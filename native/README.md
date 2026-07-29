@@ -6,10 +6,24 @@ plus platform detection. Everything written to disk or the OS keychain is
 AES-256-GCM ciphertext produced by the web layer; native code never sees
 plaintext PHI, prompts, outputs, or unwrapped keys.
 
-**Honesty:** the code and configuration here are complete and buildable with
-the documented toolchains, but **no signed binary is produced in this repo's
-CI** (no Rust/Xcode/Android SDK in the web environment). The exact blockers to
-a distributable build are listed below. Nothing is simulated as "built".
+**Honesty:** the Rust source **compile-verifies** — `cargo check` and
+`cargo clippy --all-targets` both pass clean, and CI runs `cargo check` on every
+change so it cannot silently rot. But **no signed binary is produced**: that
+needs macOS and Windows hosts plus signing certificates, none of which exist
+here. The exact blockers to a distributable build are listed below. Nothing is
+simulated as "built".
+
+> **Corrected 2026-07-29.** This file previously stated that Rust was not
+> available and described the project as "buildable" on that basis. Rust *is*
+> available in the development environment, and when the code was actually
+> compiled for the first time it **failed** — `tauri::generate_context!` panicked
+> because `icons/icon.png` did not exist. The icon set has been added and the
+> code now compiles. The lesson is recorded rather than quietly fixed: "should
+> build" was never verified until someone ran the compiler.
+
+> **The committed icons are placeholders** — a flat brand-coloured mark generated
+> programmatically so the build has something valid to embed. They must be
+> replaced with a real icon set before any distributable build.
 
 ## Web-side contract (already wired)
 
@@ -43,18 +57,22 @@ npm run build              # produces dmg/app (macOS) or msi/nsis (Windows)
 
 ### Exact blockers to a distributable desktop build
 
-1. **Rust toolchain** (`rustup`) is not present in the web CI — install locally.
+1. ~~Rust toolchain~~ — **resolved.** Rust is available and the code
+   compile-verifies; CI runs `cargo check` (see the `native` job in
+   `.github/workflows/ci.yml`). On Linux this needs
+   `libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev pkg-config`.
 2. **macOS build must run on macOS** (Xcode Command Line Tools) to produce
    `.app`/`.dmg`; **Windows build must run on Windows** (MSVC Build Tools) for
    `.msi`/`.nsis`. Cross-compilation of signed installers is out of scope.
 3. **Code-signing + notarization identities** are required for a distributable:
    an Apple Developer ID certificate + notarization for macOS; an Authenticode
    certificate for Windows. These secrets are intentionally not in the repo.
-4. **Icon set** must be generated (`npm run tauri icon`) from a source PNG.
+4. **Icon set** — placeholders are committed so the build compiles. Replace them
+   with a real set (`npm run tauri icon` from a source PNG) before shipping.
 
-Until 1–4 are done on the appropriate machines, the desktop app is
-**code-complete but not built/signed** — treated as a blocker in the Real PHI
-Readiness Gate and the deployment decision report.
+Until 2–4 are done on the appropriate machines, the desktop app is
+**code-complete and compile-verified, but not built or signed** — treated as a
+blocker in the Real PHI Readiness Gate and the deployment decision report.
 
 ## Mobile (Capacitor) — `native/capacitor/`
 

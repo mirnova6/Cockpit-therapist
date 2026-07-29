@@ -8,6 +8,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets the release-candidate stability job be confirmed on a branch BEFORE a
+  # merge, instead of discovering after the fact that it never ran green.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -60,8 +63,13 @@ jobs:
     name: Repeated E2E stability (release candidates)
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Release-candidate gate: repeated E2E is slow, so it runs on main and tags.
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    # Release-candidate gate: repeated E2E is slow, so it runs on main and tags,
+    # plus on manual dispatch so a release candidate can be confirmed on its
+    # branch before merging rather than after.
+    if: >-
+      github.ref == 'refs/heads/main'
+      || startsWith(github.ref, 'refs/tags/')
+      || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,6 +81,38 @@ jobs:
       - run: npx --yes playwright@1.61.1 install --with-deps chromium
       - name: 20 consecutive E2E runs
         run: npm run test:e2e:repeat
+
+  native:
+    name: Native desktop (Tauri) compile check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The Rust shell ships as part of the native path but is not exercised by the
+    # web test suite. It was broken and undetected until someone ran the compiler,
+    # so it is compiled on every change. This does NOT produce a signed binary —
+    # that needs macOS/Windows hosts and certificates (see native/README.md).
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux WebKit/GTK development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/tauri/src-tauri
+
+      - name: cargo check
+        working-directory: native/tauri/src-tauri
+        run: cargo check --locked
+
+      - name: cargo clippy
+        working-directory: native/tauri/src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
 
   audit:
     name: Dependency audit and secret scanning
