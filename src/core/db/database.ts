@@ -4,6 +4,7 @@
  */
 import { AiRepository } from '../ai/aiRepository';
 import { BetaRepository } from '../beta/betaRepository';
+import { TriageRepository } from '../beta/triageRepository';
 import { EvalRepository } from '../eval/evalRepository';
 import { GovernanceRepository } from '../governance/governanceRepository';
 import { KnowledgeRepository } from '../knowledge/knowledgeRepository';
@@ -66,6 +67,8 @@ export class ClinicalDatabase {
   readonly governance: GovernanceRepository;
   /** Phase 8 beta testing: mode state, guided checklist, PHI-free bug reports. */
   readonly beta: BetaRepository;
+  /** Phase 9 structured beta-feedback triage. */
+  readonly triage: TriageRepository;
   /** Phase 9 organizations, workspaces, users, memberships, supervision. */
   readonly org: OrgRepository;
   /** Phase 9 PHI-free operational diagnostics. */
@@ -101,6 +104,10 @@ export class ClinicalDatabase {
       audit: (category, action, detail) => this.audit(category, action, detail),
     });
     this.beta = new BetaRepository({
+      store: this.store,
+      audit: (category, action, detail) => this.audit(category, action, detail),
+    });
+    this.triage = new TriageRepository({
       store: this.store,
       audit: (category, action, detail) => this.audit(category, action, detail),
     });

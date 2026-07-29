@@ -36,6 +36,7 @@ import { DataFlowScreen } from '../features/governance/DataFlowScreen';
 import { BetaModeScreen } from '../features/beta/BetaModeScreen';
 import { ReleaseScreen } from '../features/release/ReleaseScreen';
 import { InteropScreen } from '../features/interop/InteropScreen';
+import { MaintenanceScreen } from '../features/maintenance/MaintenanceScreen';
 import { BetaBanner } from './components/BetaBanner';
 import { useBetaStore } from '../state/betaStore';
 import { AnalyzeTab, UpdateSummaryScreen } from '../features/intelligence/AnalyzeTab';
@@ -105,6 +106,7 @@ export function App() {
       <Route path="/release" element={<ReleaseScreen />} />
       <Route path="/beta" element={<BetaModeScreen />} />
       <Route path="/interop" element={<InteropScreen />} />
+      <Route path="/maintenance" element={<MaintenanceScreen />} />
       <Route path="/guides" element={<GuidesScreen />} />
       <Route path="/clients/:clientId" element={<ClientDashboardLayout />}>
         <Route index element={<OverviewTab />} />

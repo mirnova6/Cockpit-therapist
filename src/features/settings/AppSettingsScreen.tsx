@@ -267,6 +267,9 @@ export function AppSettingsScreen() {
               <button className="btn btn--secondary btn--sm" onClick={() => navigate('/release')}>
                 <Icon name="check" size={14} /> Release & deployment
               </button>
+              <button className="btn btn--secondary btn--sm" onClick={() => navigate('/maintenance')}>
+                <Icon name="activity" size={14} /> Maintenance & diagnostics
+              </button>
             </div>
           </div>
         </Card>
