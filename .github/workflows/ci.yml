@@ -44,9 +44,11 @@ jobs:
         run: npm run build
 
       - name: Install Chromium for E2E
-        run: npx playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '0'
+        # Pinned to the installed playwright-core version: the harness launches
+        # through playwright-core, which resolves a browser revision specific to
+        # its own version, so an unpinned `npx playwright` can install a build it
+        # will not use.
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
 
       - name: E2E (dynamic port per run)
         run: npm run test:e2e
@@ -68,7 +70,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx --yes playwright@1.61.1 install --with-deps chromium
       - name: 20 consecutive E2E runs
         run: npm run test:e2e:repeat
 

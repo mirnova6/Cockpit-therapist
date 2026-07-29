@@ -676,7 +676,9 @@ npm run test:e2e     # 175-check browser E2E: setup → clients → risk review 
 npm run test:e2e:repeat   # runs the full E2E suite 20 consecutive times (flake gate)
 ```
 
-The E2E harness takes an OS-assigned free port per run, starts its own preview
+The E2E harness resolves Chromium per environment (`E2E_CHROMIUM_PATH`, then a
+container-provided binary, then Playwright's own download) and reports which one
+it used. It takes an OS-assigned free port per run, starts its own preview
 server, waits until that server actually serves the current `dist/` build,
 verifies the served build id against `dist/index.html` (aborting loudly on stale
 or foreign servers), uses a throwaway browser profile, and always tears both

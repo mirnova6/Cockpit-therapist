@@ -9,10 +9,22 @@
  */
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+/**
+ * Where Chromium lives differs per environment: this dev container ships one at
+ * a fixed path, CI installs one via `playwright install`. Resolve rather than
+ * hard-code, and let Playwright find its own download when neither applies —
+ * passing a non-existent executablePath fails the launch outright.
+ */
+function chromiumExecutablePath() {
+  const fromEnv = process.env.E2E_CHROMIUM_PATH;
+  if (fromEnv) return fromEnv;
+  return existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined;
+}
 
 const OUT = new URL('./output/', import.meta.url).pathname;
 const DIST = new URL('../dist/', import.meta.url).pathname;
@@ -83,7 +95,11 @@ const PORT = process.env.E2E_FORCE_PORT ? Number(process.env.E2E_FORCE_PORT) : a
 const BASE = `http://127.0.0.1:${PORT}`;
 const profileDir = mkdtempSync(join(tmpdir(), 'cockpit-e2e-profile-'));
 
-console.log(`E2E harness: port=${PORT} build=${EXPECTED_BUILD} profile=${profileDir}`);
+const CHROMIUM_PATH = chromiumExecutablePath();
+console.log(
+  `E2E harness: port=${PORT} build=${EXPECTED_BUILD} profile=${profileDir} ` +
+    `chromium=${CHROMIUM_PATH ?? 'playwright default'}`,
+);
 
 // strictPort so vite fails loudly rather than silently drifting to another port.
 const server = spawn(
@@ -175,7 +191,7 @@ await (async () => {
 
 // Isolated, throwaway browser profile per run — no shared state between runs.
 context = await chromium.launchPersistentContext(profileDir, {
-  executablePath: '/opt/pw-browsers/chromium',
+  ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
   viewport: { width: 1280, height: 860 },
 });
 const page = context.pages()[0] ?? (await context.newPage());
